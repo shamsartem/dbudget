@@ -1,0 +1,57 @@
+*,
+::before,
+::after {
+  box-sizing: border-box;
+}
+
+html {
+  display: flex;
+  min-height: 100%;
+  background-color: var(--c-gray-1);
+  color: var(--c-gray-9);
+  font-family: var(--ff-default);
+  font-size: var(--fz-md);
+  line-height: var(--lh-md);
+}
+
+body {
+  display: flex;
+  width: 100%;
+  min-width: var(--min-page-width);
+  flex-direction: column;
+  flex-grow: 1;
+}
+
+.page {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  flex-grow: 1;
+}
+
+.title {
+  font-size: 30px;
+  font-weight: var(--fw-bold);
+  line-height: 1.3;
+}
+
+.visuallyHidden {
+  position: absolute !important;
+  top: -9999px !important;
+  left: -9999px !important;
+  overflow: hidden !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  border-width: 0 !important;
+  margin: -1px !important;
+  clip: rect(0, 0, 0, 0) !important;
+}
+
+.fullSize {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+}

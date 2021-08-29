@@ -1,0 +1,28 @@
+.Header {
+  display: flex;
+  width: 100%;
+  min-width: var(--min-page-width);
+  max-width: var(--max-page-width);
+  justify-content: space-between;
+  border-bottom: 1px solid var(--c-gray-4);
+  background-color: var(--c-gray-1);
+
+  &_link {
+    display: flex;
+    overflow: hidden;
+    max-width: calc(var(--max-page-width) / 3);
+    justify-content: center;
+    padding: var(--space-md) var(--space-lg);
+    text-overflow: ellipsis;
+    transition: background-color var(--t);
+    white-space: nowrap;
+
+    &.active {
+      background-color: var(--c-gray-3);
+    }
+
+    &:hover {
+      background-color: var(--c-gray-2);
+    }
+  }
+}

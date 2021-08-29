@@ -1,0 +1,59 @@
+.TransactionsList {
+  display: flex;
+  align-items: center;
+
+  &_searchContainer {
+    width: 100%;
+    min-width: var(--min-page-width);
+    max-width: var(--max-page-width);
+    padding: var(--space-md);
+    border-bottom: 1px solid var(--c-gray-4);
+    background-color: var(--c-gray-1);
+  }
+
+  &_search {
+    width: 100%;
+  }
+
+  &_list {
+    display: flex;
+    width: 100%;
+    min-width: var(--min-page-width);
+    max-width: var(--max-page-width);
+    flex-direction: column;
+    flex-grow: 1;
+  }
+
+  &_item {
+    left: 50%;
+    display: flex;
+    width: 100%;
+    min-width: var(--min-page-width);
+    max-width: var(--max-page-width);
+    height: 70px;
+    flex-direction: column;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--space-md);
+    border-bottom: 1px solid var(--c-gray-4);
+    transform: translateX(-50%);
+
+    &.isIncome {
+      background-color: var(--c-gray-2);
+    }
+  }
+
+  &_itemSection {
+    display: flex;
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  &_itemLink {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+  }
+}

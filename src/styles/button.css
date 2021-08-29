@@ -1,0 +1,39 @@
+.button {
+  display: flex;
+  justify-content: center;
+  padding: 11px;
+  background-color: var(--c-gray-3);
+  border-radius: var(--bdrs-md);
+  cursor: pointer;
+  transition: background-color var(--t);
+
+  &:hover {
+    background-color: var(--c-gray-2);
+  }
+}
+
+.roundButton {
+  position: absolute;
+  right: 15px;
+  bottom: 15px;
+  display: flex;
+  width: 56px;
+  height: 56px;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--c-gray-2);
+  border-radius: 50%;
+  box-shadow:
+    0 2px 2px 0 rgba(0, 0, 0, 0.14),
+    0 3px 1px -2px rgba(0, 0, 0, 0.12),
+    0 1px 5px 0 rgba(0, 0, 0, 0.2);
+  cursor: pointer;
+  transition: box-shadow var(--t);
+
+  &:hover {
+    box-shadow:
+      0 3px 3px 0 rgba(0, 0, 0, 0.14),
+      0 1px 7px 0 rgba(0, 0, 0, 0.12),
+      0 3px 1px -1px rgba(0, 0, 0, 0.2);
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "moduleResolution": "node",
+    "strict": true,
+    "declaration": true,
+    "noUnusedLocals": true,
+    "esModuleInterop": true,
+    "outDir": "dist",
+    "module": "commonjs",
+    "lib": ["ESNext", "DOM", "WebWorker"],
+    "sourceMap": true
+  },
+  "include": ["./src"]
+}

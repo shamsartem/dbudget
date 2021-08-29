@@ -1,0 +1,93 @@
+.Input {
+  position: relative;
+  display: flex;
+  flex-direction: column-reverse;
+
+  &_input {
+    height: 30px;
+    padding-left: 7px;
+    border: 1px solid var(--c-gray-6);
+    background-color: var(--c-gray-2);
+    border-radius: var(--bdrs-md);
+    color: var(--c-gray-9);
+    outline: none;
+
+    &:focus {
+      border-color: var(--c-gray-9);
+    }
+
+    &.isHighlighted {
+      background-color: var(--c-warning-dark);
+    }
+
+    &.hasErrors {
+      border-color: var(--c-danger);
+      margin-bottom: 16px;
+    }
+
+    &::placeholder {
+      color: var(--c-gray-5);
+    }
+  }
+
+  &_label {
+    position: relative;
+    display: flex;
+    max-width: 100%;
+    margin-bottom: 3px;
+    line-height: var(--lh-sm);
+
+    &.isCheckbox {
+      --before-size: 20px;
+
+      padding-left: calc(var(--before-size) + 10px);
+
+      &::before,
+      &::after {
+        --size: var(--before-size);
+
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: var(--size);
+        height: var(--size);
+        content: '';
+      }
+
+      &::before {
+        border: 1px solid var(--c-gray-4);
+        border-radius: var(--bdrs-md);
+        transition: border-color 0.3s ease-in-out;
+      }
+
+      &:hover::before {
+        border-color: var(--c-gray-6);
+      }
+
+      &::after {
+        --size: 12px;
+        --size-diff: calc(var(--before-size) - var(--size));
+        --offset: calc(var(--size-diff) / 2);
+
+        top: var(--offset);
+        left: var(--offset);
+        background-color: var(--c-gray-5);
+        border-radius: var(--bdrs-sm);
+        opacity: 0;
+      }
+    }
+  }
+
+  &_required {
+    display: none;
+
+    :required + label > & {
+      display: block;
+      margin-left: 5px;
+    }
+  }
+
+  &_error {
+    color: var(--c-danger);
+  }
+}

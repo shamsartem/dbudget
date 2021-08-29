@@ -1,0 +1,29 @@
+{
+  "name": "dbudget",
+  "version": "0.0.1",
+  "description": "",
+  "browser": "index.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build"
+  },
+  "author": "Artsiom Shamsutdzinau <shamsartem@gmail.com>",
+  "license": "ISC",
+  "devDependencies": {
+    "postcss-nested": "^5.0.5",
+    "postcss-preset-env": "^6.7.0",
+    "stylelint": "^13.13.1",
+    "stylelint-config-idiomatic-order": "^8.1.0",
+    "stylelint-config-standard": "^22.0.0",
+    "stylelint-no-unsupported-browser-features": "^5.0.1",
+    "vite": "2.4.4",
+    "vite-plugin-elm": "^2.4.0"
+  },
+  "browserslist": [
+    "defaults"
+  ],
+  "dependencies": {
+    "focus-trap": "^6.6.1",
+    "hyperlist": "^1.0.0"
+  }
+}

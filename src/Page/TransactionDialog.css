@@ -1,0 +1,55 @@
+.Transaction {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--c-gray-1-7);
+
+  &_container {
+    width: 100%;
+    max-width: var(--max-page-width);
+    padding: var(--space-lg);
+    background-color: var(--c-gray-1);
+  }
+
+  &_container > *:not(:first-child) {
+    margin-top: var(--space-sm);
+  }
+
+  &_closeButton {
+    position: absolute;
+    z-index: var(--z-default);
+    top: 10px;
+    right: 10px;
+    display: flex;
+    width: 40px;
+    height: 40px;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--c-black);
+    border-radius: 50%;
+
+    &::before,
+    &::after {
+      position: absolute;
+      width: 60%;
+      height: 2px;
+      background-color: var(--c-gray-8);
+      content: '';
+      transform: rotate(45deg);
+    }
+
+    &::after {
+      transform: rotate(-45deg);
+    }
+
+    &:focus {
+      outline: 1px solid var(--c-gray-8);
+    }
+  }
+
+  .button {
+    width: 100%;
+    margin-top: var(--space-md);
+  }
+}
