@@ -2,11 +2,7 @@ import { Elm } from './Main.elm'
 import HyperList from 'hyperlist'
 import * as focusTrap from 'focus-trap'
 import './styles/common.css'
-import {
-  DisplayedTransaction,
-  getListClickListener,
-  getListEl,
-} from './hyperlist'
+import { getListClickListener, getListEl } from './hyperlist'
 
 // declare global {
 //   interface Window {
@@ -30,17 +26,16 @@ import {
 // const flags = {
 //   randomSeed: [randomIntegers[0], randomIntegers.slice(1)],
 // }
+;(() => {
+  const appEl = document.getElementById('app')
+  if (!appEl) return
+  const app = Elm.Main.init({ node: appEl })
 
-const app = Elm.Main.init({
-  node: document.getElementById('app'),
-})
+  const listClickListener = getListClickListener(app)
 
-const listClickListener = getListClickListener(app)
+  let trap: focusTrap.FocusTrap | undefined
 
-let trap: focusTrap.FocusTrap | undefined
-
-app.ports.onTransactionListInit.subscribe(
-  (list: Array<DisplayedTransaction>) => {
+  app.ports.onTransactionListInit.subscribe(list => {
     const el = document.getElementsByClassName('TransactionsList_list')[0]
     if (!el) return
 
@@ -49,24 +44,16 @@ app.ports.onTransactionListInit.subscribe(
     new HyperList(el, {
       itemHeight: 70,
       total: list.length,
-      generate(index: number) {
+      generate(index) {
         return getListEl(list[index])
       },
     })
-  },
-)
+  })
 
-const isLinkEl = (el: Element): el is HTMLLinkElement =>
-  Boolean(el && 'focus' in el)
+  const isLinkEl = (el: Element): el is HTMLLinkElement =>
+    Boolean(el && 'focus' in el)
 
-app.ports.onTransactionDialogInit.subscribe(
-  ({
-    dialogId,
-    transactionId,
-  }: {
-    dialogId: string
-    transactionId: string
-  }) => {
+  app.ports.onTransactionDialogInit.subscribe(({ dialogId, transactionId }) => {
     const el = document.getElementById(dialogId)
     if (!el) return
     const parent = el.parentElement
@@ -83,7 +70,6 @@ app.ports.onTransactionDialogInit.subscribe(
           trap.deactivate()
           trap = undefined
           const elementToReturnFocusTo = document.getElementById(transactionId)
-          console.log(transactionId)
           if (!elementToReturnFocusTo) {
             const header = document.getElementsByClassName('Header')
             if (!header || !header[0]) return
@@ -107,5 +93,5 @@ app.ports.onTransactionDialogInit.subscribe(
     observer.observe(parent, { childList: true })
     trap = focusTrap.createFocusTrap(el)
     trap.activate()
-  },
-)
+  })
+})()

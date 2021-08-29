@@ -1,17 +1,16 @@
 port module Page.TransactionDialog exposing (..)
 
-import Browser.Events exposing (onKeyDown, onKeyPress)
+import Browser.Events exposing (onKeyDown)
 import Browser.Navigation as Nav
 import Html exposing (..)
 import Html.Attributes exposing (class, id, type_)
 import Html.Events exposing (onClick, onSubmit)
 import Json.Decode as Decode exposing (string)
 import Page
-import Route exposing (Route)
+import Route
 import Task
 import Time exposing (Posix)
 import Transaction exposing (Field(..))
-import Url exposing (Url)
 import View.Checkbox exposing (viewCheckbox)
 import View.Input exposing (viewInput)
 
@@ -254,20 +253,17 @@ type Msg
 
 escDecoder : Decode.Decoder Msg
 escDecoder =
-    Debug.log "sss"
-        (Decode.map toEscKey (Decode.field "key" Decode.string))
+    Decode.map toEscKey (Decode.field "key" Decode.string)
 
 
 toEscKey : String -> Msg
 toEscKey string =
-    Debug.log string
-        (case string of
-            "Escape" ->
-                Close
+    case string of
+        "Escape" ->
+            Close
 
-            _ ->
-                NoOp
-        )
+        _ ->
+            NoOp
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -283,8 +279,7 @@ update msg model =
     in
     case msg of
         Close ->
-            Debug.log "sus"
-                ( model, Route.pushUrl model.key Route.TransactionList )
+            ( model, Route.pushUrl model.key Route.TransactionList )
 
         IsIncomeInput bool ->
             updateTransactionForm (\val -> { val | isIncome = bool }) model

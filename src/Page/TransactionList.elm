@@ -47,7 +47,7 @@ type alias Model =
 port onTransactionListInit : List DisplayedTransaction -> Cmd msg
 
 
-port clickedHyperlistLink : (String -> msg) -> Sub msg
+port clickedHyperListLink : (String -> msg) -> Sub msg
 
 
 init : Nav.Key -> Maybe TransactionDialog -> ( Model, Cmd Msg )
@@ -170,7 +170,7 @@ view model =
 
 type Msg
     = SearchInput String
-    | ClickedHyperlistLink String
+    | ClickedHyperListLink String
     | GotTransactionDialogMsg TransactionDialog.Msg
 
 
@@ -180,7 +180,7 @@ update navKey msg model =
         SearchInput str ->
             ( { model | search = str }, Cmd.none )
 
-        ClickedHyperlistLink string ->
+        ClickedHyperListLink string ->
             ( model, pushUrl navKey string )
 
         GotTransactionDialogMsg subMsg ->
@@ -204,7 +204,7 @@ subscriptions : Model -> Sub Msg
 subscriptions model =
     case model.maybeTransactionDialogModel of
         Nothing ->
-            clickedHyperlistLink ClickedHyperlistLink
+            clickedHyperListLink ClickedHyperListLink
 
         Just transactionDialogModel ->
             Sub.map GotTransactionDialogMsg (TransactionDialog.subscriptions transactionDialogModel)
