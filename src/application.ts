@@ -1,8 +1,6 @@
 import { Elm } from './Main.elm'
-import HyperList from 'hyperlist'
-import * as focusTrap from 'focus-trap'
+import portSetups from './portSetups'
 import './styles/common.css'
-import { getListClickListener, getListEl } from './hyperlist'
 
 // declare global {
 //   interface Window {
@@ -26,72 +24,10 @@ import { getListClickListener, getListEl } from './hyperlist'
 // const flags = {
 //   randomSeed: [randomIntegers[0], randomIntegers.slice(1)],
 // }
-;(() => {
-  const appEl = document.getElementById('app')
-  if (!appEl) return
+const appEl = document.getElementById('app')
+
+if (appEl) {
   const app = Elm.Main.init({ node: appEl })
 
-  const listClickListener = getListClickListener(app)
-
-  let trap: focusTrap.FocusTrap | undefined
-
-  app.ports.onTransactionListInit.subscribe(list => {
-    const el = document.getElementsByClassName('TransactionsList_list')[0]
-    if (!el) return
-
-    el.addEventListener('click', listClickListener)
-
-    new HyperList(el, {
-      itemHeight: 70,
-      total: list.length,
-      generate(index) {
-        return getListEl(list[index])
-      },
-    })
-  })
-
-  const isLinkEl = (el: Element): el is HTMLLinkElement =>
-    Boolean(el && 'focus' in el)
-
-  app.ports.onTransactionDialogInit.subscribe(({ dialogId, transactionId }) => {
-    const el = document.getElementById(dialogId)
-    if (!el) return
-    const parent = el.parentElement
-    if (!parent) return
-    // Create an observer instance linked to the callback function
-    const observer = new MutationObserver((mutationsList, observer) => {
-      mutationsList.forEach(mutation => {
-        if (
-          trap &&
-          mutation.type === 'childList' &&
-          Array.from(mutation.removedNodes).includes(el)
-        ) {
-          observer.disconnect()
-          trap.deactivate()
-          trap = undefined
-          const elementToReturnFocusTo = document.getElementById(transactionId)
-          if (!elementToReturnFocusTo) {
-            const header = document.getElementsByClassName('Header')
-            if (!header || !header[0]) return
-            const firstEl = header[0]
-            if (isLinkEl(firstEl)) {
-              firstEl.focus()
-            }
-            return
-          }
-
-          if (isLinkEl(elementToReturnFocusTo)) {
-            return
-          }
-
-          elementToReturnFocusTo.focus()
-        }
-      })
-    })
-
-    // Start observing the target node for configured mutations
-    observer.observe(parent, { childList: true })
-    trap = focusTrap.createFocusTrap(el)
-    trap.activate()
-  })
-})()
+  Object.values(portSetups).forEach(portSetup => portSetup(app))
+}

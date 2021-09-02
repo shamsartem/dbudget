@@ -17,6 +17,15 @@ declare type ElmApp = {
         callback: (ids: { dialogId: string; transactionId: string }) => void,
       ) => void
     }
+    onSignIn: {
+      subscribe: (
+        callback: (cred: {
+          username: string
+          deviceName: string
+          password: string
+        }) => void,
+      ) => void
+    }
     clickedHyperListLink: {
       send: (id: string) => void
     }

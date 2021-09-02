@@ -1,21 +1,7 @@
-const isLinkEl = (el: unknown): el is HTMLLinkElement =>
-  Boolean(el && typeof el === 'object' && 'href' in el)
+import HyperList from 'hyperlist'
+import { isLinkEl } from '../type-helpers'
 
-export const getListClickListener =
-  (app: ElmApp) =>
-  (e: Event): void => {
-    e.preventDefault()
-
-    const maybeLinkEl = e.target
-    if (isLinkEl(maybeLinkEl)) {
-      const linkEl = maybeLinkEl
-      app.ports.clickedHyperListLink.send(linkEl.href)
-    }
-  }
-
-export const getListEl = (
-  currentItem?: DisplayedTransaction,
-): HTMLDivElement => {
+const getListEl = (currentItem?: DisplayedTransaction): HTMLDivElement => {
   if (!currentItem) {
     const el = document.createElement('div')
     el.innerHTML = 'Sync issue'
@@ -48,4 +34,31 @@ export const getListEl = (
   `.trim()
 
   return item
+}
+
+export default (app: ElmApp): void => {
+  const listClickListener = (e: Event): void => {
+    e.preventDefault()
+
+    const maybeLinkEl = e.target
+    if (isLinkEl(maybeLinkEl)) {
+      const linkEl = maybeLinkEl
+      app.ports.clickedHyperListLink.send(linkEl.href)
+    }
+  }
+
+  app.ports.onTransactionListInit.subscribe(list => {
+    const el = document.getElementsByClassName('TransactionsList_list')[0]
+    if (!el) return
+
+    el.addEventListener('click', listClickListener)
+
+    new HyperList(el, {
+      itemHeight: 70,
+      total: list.length,
+      generate(index) {
+        return getListEl(list[index])
+      },
+    })
+  })
 }

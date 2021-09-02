@@ -1,12 +1,15 @@
-module Cred exposing (Cred, credValueToCred, getUsername, tempCred)
+module Cred exposing (Cred, CredValue, credToCredValue, credValueToCred, getUsername, tempCred)
+
+
+type alias CredValue =
+    { username : String
+    , deviceName : String
+    , password : String
+    }
 
 
 type Cred
-    = Cred
-        { username : String
-        , deviceName : String
-        , password : String
-        }
+    = Cred CredValue
 
 
 getUsername : Cred -> String
@@ -14,12 +17,7 @@ getUsername (Cred { username }) =
     username
 
 
-credValueToCred :
-    { username : String
-    , deviceName : String
-    , password : String
-    }
-    -> Maybe Cred
+credValueToCred : CredValue -> Maybe Cred
 credValueToCred credValue =
     let
         { username, deviceName, password } =
@@ -30,6 +28,11 @@ credValueToCred credValue =
 
     else
         Nothing
+
+
+credToCredValue : Cred -> CredValue
+credToCredValue (Cred credValue) =
+    credValue
 
 
 tempCred : Cred

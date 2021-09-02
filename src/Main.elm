@@ -1,9 +1,9 @@
-module Main exposing (PageModel, main)
+port module Main exposing (PageModel, main)
 
 import Browser exposing (Document)
 import Browser.Dom exposing (Error(..))
 import Browser.Navigation as Nav
-import Cred exposing (Cred)
+import Cred exposing (Cred, CredValue)
 import Html exposing (..)
 import Html.Attributes exposing (..)
 import Page exposing (Page(..))
@@ -30,6 +30,13 @@ type PageModel
     | SignIn SignIn.Model
     | TransactionList TransactionList.Model
     | CSV CSV.Model
+
+
+
+-- PORTS
+
+
+port onSignIn : CredValue -> Cmd msg
 
 
 
@@ -178,8 +185,17 @@ update msg model =
                             normalUpdate
 
                         Just cred ->
-                            changeRouteTo (Route.fromUrl model.url)
-                                { model | maybeCred = Just cred }
+                            let
+                                ( m, cmd ) =
+                                    changeRouteTo (Route.fromUrl model.url)
+                                        { model | maybeCred = Just cred }
+                            in
+                            ( m
+                            , Cmd.batch
+                                [ cmd
+                                , onSignIn (Cred.credToCredValue cred)
+                                ]
+                            )
 
                 _ ->
                     normalUpdate
