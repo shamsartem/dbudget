@@ -2,40 +2,61 @@ module View.Header exposing (..)
 
 import Html exposing (..)
 import Html.Attributes exposing (class, classList)
-import Page exposing (Page)
-import Route exposing (Route)
+import Route exposing (Route(..))
 
 
-viewHeader : Page -> Html msg
+{-| Determines which header link (if any) will be rendered as active.
+
+Note that we don't enumerate every page here, because the header doesn't
+have links for every page. Anything that's not part of the header falls
+under Other.
+
+-}
+type ActiveNav
+    = Other
+    | TransactionList
+    | CSV
+
+
+newtransactionid : String
+newtransactionid =
+    "newTransaction"
+
+
+viewHeader : ActiveNav -> Html msg
 viewHeader page =
     let
-        linkTo =
-            navbarLink page
+        linkto =
+            headerLink page
     in
     nav [ class "Header" ]
-        [ linkTo Route.TransactionList [ text "Transactions" ]
-        , linkTo Route.CSV [ text "CSV" ]
+        [ linkto Route.TransactionList [ text "Transactions" ]
+        , linkto Route.CSV [ text "CSV" ]
         , button [ class "Header_link" ] [ text "Log out" ]
         ]
 
 
-navbarLink : Page -> Route -> List (Html msg) -> Html msg
-navbarLink page route linkContent =
+headerLink : ActiveNav -> Route -> List (Html msg) -> Html msg
+headerLink page route linkcontent =
     a
         [ class "Header_link"
-        , classList [ ( "active", isActive page route ) ]
+        , classList
+            [ ( "active"
+              , isActive page route
+              )
+            ]
         , Route.href route
         ]
-        linkContent
+        linkcontent
 
 
-isActive : Page -> Route -> Bool
-isActive page route =
-    case ( page, route ) of
-        ( Page.TransactionList, Route.TransactionList ) ->
+isActive : ActiveNav -> Route -> Bool
+isActive nav route =
+    case ( nav, route ) of
+        ( TransactionList, Route.TransactionList ) ->
             True
 
-        ( Page.CSV, Route.CSV ) ->
+        ( CSV, Route.CSV ) ->
             True
 
         _ ->

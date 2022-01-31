@@ -3,9 +3,10 @@ module Route exposing (Route(..), fromUrl, href, pushUrl, replaceUrl)
 import Browser.Navigation as Nav
 import Html exposing (Attribute)
 import Html.Attributes as Attr
-import TransactionId exposing (TransactionId)
+import Prng.Uuid exposing (Uuid)
 import Url exposing (Url)
 import Url.Parser as Parser exposing ((</>), Parser, oneOf, s)
+import UuidSeed
 
 
 
@@ -15,7 +16,7 @@ import Url.Parser as Parser exposing ((</>), Parser, oneOf, s)
 type Route
     = TransactionList
     | TransactionNew
-    | Transaction TransactionId
+    | Transaction Uuid
     | CSV
 
 
@@ -24,28 +25,28 @@ routeParser =
     oneOf
         [ Parser.map TransactionList Parser.top
         , Parser.map TransactionNew (s "transaction" </> s "new")
-        , Parser.map Transaction (s "transaction" </> TransactionId.urlParser)
+        , Parser.map Transaction (s "transaction" </> UuidSeed.urlParser)
         , Parser.map CSV (s "csv")
         ]
 
 
 
--- PUBLIC HELPERS
+-- public helpers
 
 
 href : Route -> Attribute msg
-href targetRoute =
-    Attr.href (routeToString targetRoute)
+href targetroute =
+    Attr.href (routetostring targetroute)
 
 
 replaceUrl : Nav.Key -> Route -> Cmd msg
 replaceUrl key route =
-    Nav.replaceUrl key (routeToString route)
+    Nav.replaceUrl key (routetostring route)
 
 
 pushUrl : Nav.Key -> Route -> Cmd msg
 pushUrl key route =
-    Nav.pushUrl key (routeToString route)
+    Nav.pushUrl key (routetostring route)
 
 
 fromUrl : Url -> Maybe Route
@@ -54,25 +55,29 @@ fromUrl url =
 
 
 
--- INTERNAL
+-- internal
 
 
-routeToString : Route -> String
-routeToString page =
-    "/" ++ String.join "/" (routeToPath page)
+routetostring : Route -> String
+routetostring page =
+    "/" ++ String.join "/" (routetopath page)
 
 
-routeToPath : Route -> List String
-routeToPath page =
+routetopath : Route -> List String
+routetopath page =
     case page of
         TransactionList ->
             []
 
         TransactionNew ->
-            [ "transaction", "new" ]
+            [ "transaction"
+            , "new"
+            ]
 
         Transaction id ->
-            [ "transaction", TransactionId.toString id ]
+            [ "transaction"
+            , Prng.Uuid.toString id
+            ]
 
         CSV ->
             [ "csv" ]

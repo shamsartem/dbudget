@@ -1,30 +1,48 @@
-module View.Input exposing (Config, viewInput)
+module View.Input exposing
+    ( Config
+    , viewInput
+    )
 
 import Html exposing (..)
-import Html.Attributes exposing (attribute, class, classList, for, id, placeholder, required, title, value)
-import Html.Events exposing (onBlur, onInput)
+import Html.Attributes
+    exposing
+        ( attribute
+        , class
+        , classList
+        , for
+        , id
+        , placeholder
+        , required
+        , title
+        , value
+        )
+import Html.Events
+    exposing
+        ( onBlur
+        , onInput
+        )
 import Html.Keyed as Keyed
 
 
 type alias Config msg =
-    { onInput : String -> msg
-    , onBlur : Maybe msg
-    , value : String
+    { dirty : Bool
+    , error : Maybe String
+    , hasPlaceholder : Bool
     , id : String
     , label : String
-    , required : Bool
-    , hasPlaceholder : Bool
+    , onBlur : Maybe msg
+    , onInput : String -> msg
     , otherAttributes : List (Attribute msg)
-    , error : Maybe String
+    , required : Bool
+    , value : String
     , warning : Maybe String
-    , dirty : Bool
     }
 
 
 viewInput : Config msg -> Html msg
 viewInput config =
     let
-        requiredStar =
+        requiredstar =
             if config.required then
                 [ i
                     [ attribute "aria-hidden" "true"
@@ -38,17 +56,21 @@ viewInput config =
             else
                 []
 
-        viewLabel =
+        viewlabel =
             label
                 [ for config.id
                 , class "Input_label"
-                , classList [ ( "visuallyHidden", config.hasPlaceholder ) ]
+                , classList
+                    [ ( "visuallyHidden"
+                      , config.hasPlaceholder
+                      )
+                    ]
                 ]
             <|
                 text config.label
-                    :: requiredStar
+                    :: requiredstar
 
-        defaultInputAttributes =
+        defaultinputattributes =
             List.append
                 [ class "Input_input"
                 , onInput config.onInput
@@ -61,36 +83,44 @@ viewInput config =
         errorId =
             config.id ++ "-error"
 
-        hasError =
+        haserror =
             Maybe.withDefault "" config.error /= ""
 
-        optinalAttributePairs =
-            [ ( config.hasPlaceholder, placeholder config.label )
-            , ( hasError, attribute "aria-describedby" errorId )
+        optinalattributepairs =
+            [ ( config.hasPlaceholder
+              , placeholder config.label
+              )
+            , ( haserror
+              , attribute "aria-describedby" errorId
+              )
             ]
 
-        inputAttributes =
+        inputattributes =
             let
                 attrs =
-                    optinalAttributePairs
-                        |> List.filter (\( bool, _ ) -> bool)
-                        |> List.map (\( _, val ) -> val)
-                        |> List.append defaultInputAttributes
+                    optinalattributepairs
+                        |> List.filter
+                            (\( bool, _ ) ->
+                                bool
+                            )
+                        |> List.map
+                            (\( _, val ) ->
+                                val
+                            )
+                        |> List.append defaultinputattributes
             in
             case config.onBlur of
                 Nothing ->
                     attrs
 
-                Just blurHandler ->
-                    onBlur blurHandler :: attrs
+                Just blurhandler ->
+                    onBlur blurhandler :: attrs
 
-        inputHtml =
-            [ ( "1"
-              , input
-                    inputAttributes
-                    []
+        inputhtml =
+            [ ( "1", input inputattributes [] )
+            , ( "2"
+              , viewlabel
               )
-            , ( "2", viewLabel )
             ]
     in
     Keyed.node "div"
@@ -98,11 +128,18 @@ viewInput config =
         (if config.dirty then
             case config.error of
                 Nothing ->
-                    inputHtml
+                    inputhtml
 
                 Just error ->
-                    ( "3", div [ class "Input_error", id errorId ] [ text error ] ) :: inputHtml
+                    ( "3"
+                    , div
+                        [ class "Input_error"
+                        , id errorId
+                        ]
+                        [ text error ]
+                    )
+                        :: inputhtml
 
          else
-            inputHtml
+            inputhtml
         )

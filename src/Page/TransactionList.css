@@ -15,6 +15,17 @@
     width: 100%;
   }
 
+  &_statusMessage {
+    display: flex;
+    min-width: var(--min-page-width);
+    max-width: var(--max-page-width);
+    flex-grow: 1;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-lg);
+    text-align: center;
+  }
+
   &_list {
     display: flex;
     width: 100%;
@@ -25,7 +36,7 @@
   }
 
   &_item {
-    left: 50%;
+    position: relative;
     display: flex;
     width: 100%;
     min-width: var(--min-page-width);
@@ -36,7 +47,6 @@
     justify-content: space-between;
     padding: var(--space-md);
     border-bottom: 1px solid var(--c-gray-4);
-    transform: translateX(-50%);
 
     &.isIncome {
       background-color: var(--c-gray-2);

@@ -1,42 +1,58 @@
 module View.Checkbox exposing (Config, viewCheckbox)
 
 import Html exposing (..)
-import Html.Attributes exposing (attribute, checked, class, for, id, required, type_)
+import Html.Attributes
+    exposing
+        ( attribute
+        , checked
+        , class
+        , for
+        , id
+        , required
+        , type_
+        )
 import Html.Events exposing (onCheck)
 
 
 type alias Config msg =
-    { onCheck : Bool -> msg
-    , checked : Bool
-    , id : String
-    , label : String
-    , required : Bool
+    { checked : Bool
+    , id :
+        String
+    , label :
+        String
+    , onCheck :
+        Bool -> msg
     , otherAttributes : List (Attribute msg)
+    , required : Bool
     }
 
 
 viewCheckbox : Config msg -> Html msg
 viewCheckbox config =
     let
-        requiredStar =
+        requiredstar =
             if config.required then
-                [ i [ attribute "aria-hidden" "true", class "Input_required" ] [ text "*" ]
+                [ i
+                    [ attribute "aria-hidden" "true"
+                    , class "Input_required"
+                    ]
+                    [ text "*" ]
                 , i [ class "visuallyHidden" ] [ text "required" ]
                 ]
 
             else
                 []
 
-        viewLabel =
+        viewlabel =
             label
                 [ for config.id
                 , class "Checkbox_label"
                 ]
             <|
                 text config.label
-                    :: requiredStar
+                    :: requiredstar
 
-        checkboxAttributes =
+        checkboxattributes =
             List.append
                 [ class "Checkbox_input visuallyHidden"
                 , onCheck config.onCheck
@@ -49,7 +65,7 @@ viewCheckbox config =
     in
     div [ class "Checkbox" ]
         [ input
-            checkboxAttributes
+            checkboxattributes
             []
-        , viewLabel
+        , viewlabel
         ]

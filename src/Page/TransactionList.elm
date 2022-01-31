@@ -1,210 +1,192 @@
-port module Page.TransactionList exposing (..)
+module Page.TransactionList exposing (..)
 
-import Browser.Navigation as Nav exposing (pushUrl)
-import Dict exposing (Dict)
+import Browser.Navigation as Nav
+import Dict
 import Html exposing (..)
-import Html.Attributes exposing (class, id)
+import Html.Attributes exposing (attribute, class, classList, id)
 import Maybe exposing (withDefault)
-import Page
-import Page.TransactionDialog as TransactionDialog exposing (TransactionDialog)
-import Page.TransactionsMock exposing (getTransactionsList)
+import Prng.Uuid exposing (Uuid)
 import Result exposing (Result(..))
-import Route
+import Route exposing (Route(..))
 import Transaction
     exposing
-        ( Field(..)
+        ( DecimalsDict
+        , Field(..)
+        , Transactions(..)
+        , TransactionsDict
         , getFullPrice
         , getTransactionValue
-        , transactionsToDecimals
         )
-import View.Header exposing (viewHeader)
+import View.Header as Header exposing (viewHeader)
 import View.Input exposing (viewInput)
 
 
 type alias DisplayedTransaction =
-    { name : String
-    , category : String
+    { category : String
     , date : String
-    , price : String
-    , id : String
+    , id : Uuid
     , isIncome : Bool
+    , name : String
+    , price : String
     }
 
 
 type alias Model =
     { search : String
-    , transactions : List Transaction.Transaction
-    , decimals : Dict String Int
-    , displayedTransactions : List DisplayedTransaction
-    , maybeTransactionDialogModel : Maybe TransactionDialog.Model
     }
 
 
-
--- PORTS
-
-
-port onTransactionListInit : List DisplayedTransaction -> Cmd msg
+type alias MainModel =
+    { navKey : Nav.Key
+    }
 
 
-port clickedHyperListLink : (String -> msg) -> Sub msg
+cl : String -> String
+cl elementAndOrModifier =
+    "TransactionsList_" ++ elementAndOrModifier
 
 
-init : Nav.Key -> Maybe TransactionDialog -> ( Model, Cmd Msg )
-init key maybeTransactionDialog =
+c : String -> Attribute msg
+c elementAndOrModifier =
+    class (cl elementAndOrModifier)
+
+
+viewDisplayedTransactions : TransactionsDict -> DecimalsDict -> List (Html Msg)
+viewDisplayedTransactions transactionsDict decimalsDict =
+    List.map
+        (\transaction ->
+            let
+                transactionValue =
+                    getTransactionValue transaction
+
+                { isIncome, date, category, name, id } =
+                    transactionValue
+
+                fullPrice =
+                    withDefault "" (getFullPrice transactionValue decimalsDict)
+            in
+            transactionItem
+                { isIncome = isIncome
+                , price = fullPrice
+                , date = date
+                , category = category
+                , name = name
+                , id = id
+                }
+        )
+        (List.map (\( _, v ) -> v) (Dict.toList transactionsDict))
+
+
+viewTransactions : Transactions -> Html Msg
+viewTransactions transactions =
     let
-        transactionsList =
-            getTransactionsList "some-uuid"
-
-        decimals =
-            transactionsToDecimals transactionsList
-
-        displayedTransactions =
-            List.map
-                (\transaction ->
-                    let
-                        transactionValue =
-                            getTransactionValue transaction
-
-                        { isIncome, date, category, name, id } =
-                            transactionValue
-
-                        fullPrice =
-                            withDefault ""
-                                (getFullPrice transactionValue decimals)
-                    in
-                    { isIncome = isIncome
-                    , price = fullPrice
-                    , date = date
-                    , category = category
-                    , name = name
-                    , id = id
-                    }
-                )
-                transactionsList
-
-        maybeTransactionDialogModelAndCmd =
-            Maybe.map
-                (\transactionDialog -> TransactionDialog.init key transactionDialog)
-                maybeTransactionDialog
+        getMessage msg =
+            div [ c "statusMessage" ] [ text msg ]
     in
-    case maybeTransactionDialogModelAndCmd of
-        Nothing ->
-            ( { search = ""
-              , transactions = transactionsList
-              , decimals = transactionsToDecimals transactionsList
-              , displayedTransactions = displayedTransactions
-              , maybeTransactionDialogModel = Nothing
-              }
-            , onTransactionListInit displayedTransactions
-            )
+    case transactions of
+        NotSignedIn ->
+            getMessage "Initializing..."
 
-        Just ( transactionDialogModel, transactionDialogModelMsg ) ->
-            ( { search = ""
-              , transactions = transactionsList
-              , decimals = transactionsToDecimals transactionsList
-              , displayedTransactions = displayedTransactions
-              , maybeTransactionDialogModel = Just transactionDialogModel
-              }
-            , Cmd.batch
-                [ onTransactionListInit displayedTransactions
-                , Cmd.map GotTransactionDialogMsg transactionDialogModelMsg
-                ]
-            )
+        Loading _ ->
+            getMessage "Loading..."
+
+        Loaded { transactionsDict, decimalsDict } ->
+            let
+                displ =
+                    viewDisplayedTransactions transactionsDict decimalsDict
+            in
+            case displ of
+                [] ->
+                    getMessage "You currently have no transactions. Add them by using \"+\" button in the bottom right corner of the screen"
+
+                _ ->
+                    div [ c "list" ] displ
+
+        Error errorText ->
+            getMessage errorText
+
+
+init : MainModel -> ( Model, Cmd Msg )
+init _ =
+    ( { search = "" }
+    , Cmd.none
+    )
 
 
 
 -- VIEW
 
 
-view : Model -> { title : String, content : Html Msg }
-view model =
-    let
-        { title, content } =
-            Maybe.withDefault
-                { title = "Transactions"
-                , content = text ""
-                }
-                (Maybe.map
-                    (\transactionDialogModel ->
-                        TransactionDialog.view transactionDialogModel
-                    )
-                    model.maybeTransactionDialogModel
-                )
-    in
-    { title = title
-    , content =
-        div [ class "TransactionsList page" ]
-            [ viewHeader Page.TransactionList
-            , form [ class "TransactionsList_searchContainer" ]
-                [ div [ class "TransactionsList_search" ]
-                    [ viewInput
-                        { label = "search"
-                        , onInput = SearchInput
-                        , onBlur = Nothing
-                        , value = model.search
-                        , required = False
-                        , id = "login"
-                        , hasPlaceholder = True
-                        , otherAttributes = []
-                        , error = Nothing
-                        , warning = Nothing
-                        , dirty = False
-                        }
-                    ]
-                ]
-            , div
-                [ class "TransactionsList_list" ]
-                []
-            , a
-                [ class "roundButton", Route.href Route.TransactionNew, id Page.newTransactionId ]
-                [ text "+" ]
-            , Html.map GotTransactionDialogMsg content
+transactionItem : DisplayedTransaction -> Html Msg
+transactionItem { date, category, name, price, id, isIncome } =
+    div
+        [ c "item"
+        , classList [ ( cl "item__isIncome", isIncome ) ]
+        ]
+        [ div [ c "itemSection" ]
+            [ div [] [ text date ]
+            , div [] [ text category ]
             ]
-    }
+        , div [ c "itemSection" ]
+            [ div [] [ text name ]
+            , div [] [ text price ]
+            ]
+        , a [ Route.href (Route.Transaction id), c "itemLink" ]
+            [ div
+                [ class "visuallyHidden" ]
+                [ text (name ++ price ++ date ++ category) ]
+            ]
+        ]
+
+
+view : Transactions -> Model -> Html Msg
+view transactions model =
+    div [ class "TransactionsList page" ]
+        [ viewHeader Header.TransactionList
+        , form [ c "searchContainer" ]
+            [ div [ c "search" ]
+                [ viewInput
+                    { label = "search"
+                    , onInput = SearchInput
+                    , onBlur = Nothing
+                    , value = model.search
+                    , required = False
+                    , id = "login"
+                    , hasPlaceholder = True
+                    , otherAttributes = []
+                    , error = Nothing
+                    , warning = Nothing
+                    , dirty = False
+                    }
+                ]
+            ]
+        , viewTransactions transactions
+        , a
+            [ class "roundButton"
+            , Route.href Route.TransactionNew
+            , id Header.newtransactionid
+            ]
+            [ span [ attribute "aria-hidden" "true" ] [ text "+" ]
+            , span [ class "visuallyHidden" ] [ text "Add Transaction" ]
+            ]
+        ]
 
 
 
--- UPDATE
+-- update
 
 
 type Msg
     = SearchInput String
-    | ClickedHyperListLink String
-    | GotTransactionDialogMsg TransactionDialog.Msg
 
 
-update : Nav.Key -> Msg -> Model -> ( Model, Cmd Msg )
-update navKey msg model =
+update : MainModel -> Msg -> Model -> ( Model, Cmd Msg )
+update _ msg model =
     case msg of
         SearchInput str ->
             ( { model | search = str }, Cmd.none )
 
-        ClickedHyperListLink string ->
-            ( model, pushUrl navKey string )
-
-        GotTransactionDialogMsg subMsg ->
-            let
-                maybeTransactionDialogModelAndCmd =
-                    Maybe.map
-                        (\transactionDialog -> TransactionDialog.update subMsg transactionDialog)
-                        model.maybeTransactionDialogModel
-            in
-            case maybeTransactionDialogModelAndCmd of
-                Nothing ->
-                    ( model, Cmd.none )
-
-                Just ( transactionDialogModel, transactionDialogModelMsg ) ->
-                    ( { model | maybeTransactionDialogModel = Just transactionDialogModel }
-                    , Cmd.map GotTransactionDialogMsg transactionDialogModelMsg
-                    )
-
 
 subscriptions : Model -> Sub Msg
-subscriptions model =
-    case model.maybeTransactionDialogModel of
-        Nothing ->
-            clickedHyperListLink ClickedHyperListLink
-
-        Just transactionDialogModel ->
-            Sub.map GotTransactionDialogMsg (TransactionDialog.subscriptions transactionDialogModel)
+subscriptions _ =
+    Sub.none

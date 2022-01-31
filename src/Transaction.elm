@@ -1,20 +1,32 @@
 module Transaction exposing
-    ( Field(..)
+    ( DecimalsDict
+    , Field(..)
     , Transaction
     , TransactionValue
+    , TransactionValueList
+    , Transactions(..)
+    , TransactionsDict
+    , getDefaultTransactionValue
     , getFullPrice
     , getPrice
     , getTransaction
     , getTransactionValue
+    , stringToTransactionDict
+    , toJsonValue
     , transactionsToDecimals
-    , validateTransaction
+    , validateTransactionValue
     )
 
+import Array exposing (Array)
 import Dict exposing (Dict)
 import Iso8601
+import Json.Decode as Decode
+import Json.Encode as Encode
 import List
 import Maybe exposing (andThen, withDefault)
+import Prng.Uuid exposing (Uuid)
 import Time exposing (Posix)
+import UuidSeed exposing (UuidSeed)
 import Validate
     exposing
         ( Validator
@@ -44,13 +56,94 @@ type alias TransactionValue =
     , amount : String
     , description : String
     , currency : String
-    , id : String
+    , id : Uuid
     , lastUpdated : Posix
+    , isDeleted : Bool
     }
+
+
+getDefaultTransactionValue : Uuid -> TransactionValue
+getDefaultTransactionValue id =
+    { isIncome = False
+    , date = ""
+    , category = ""
+    , name = ""
+    , price = ""
+    , amount = ""
+    , description = ""
+    , currency = ""
+    , id = id
+    , lastUpdated = Time.millisToPosix 0
+    , isDeleted = False
+    }
+
+
+toJsonValue : TransactionsDict -> Encode.Value
+toJsonValue transactionsDict =
+    let
+        boolToString bool =
+            if bool then
+                "1"
+
+            else
+                ""
+    in
+    transactionsDict
+        |> Dict.toList
+        |> List.map (\( _, transation ) -> getTransactionValue transation)
+        |> Encode.list
+            (\{ isIncome, date, category, name, price, amount, description, currency, id, lastUpdated, isDeleted } ->
+                Encode.list
+                    (\value -> value)
+                    [ Encode.string (boolToString isIncome) -- 0
+                    , Encode.string date -- 1
+                    , Encode.string category -- 2
+                    , Encode.string name -- 3
+                    , Encode.string price -- 4
+                    , Encode.string amount -- 5
+                    , Encode.string description -- 6
+                    , Encode.string currency -- 7
+                    , id
+                        -- 8
+                        |> Prng.Uuid.toString
+                        |> Encode.string
+                    , lastUpdated
+                        -- 9
+                        |> Time.posixToMillis
+                        |> String.fromInt
+                        |> Encode.string
+                    , Encode.string (boolToString isDeleted) -- 10
+                    ]
+            )
 
 
 type Transaction
     = Transaction TransactionValue
+
+
+type alias TransactionValueList =
+    List TransactionValue
+
+
+type alias TransactionsDict =
+    Dict String Transaction
+
+
+type alias DecimalsDict =
+    Dict String Int
+
+
+type alias TransactionsData =
+    { transactionsDict : TransactionsDict
+    , decimalsDict : DecimalsDict
+    }
+
+
+type Transactions
+    = NotSignedIn
+    | Loading TransactionsData
+    | Loaded TransactionsData
+    | Error String
 
 
 getTransactionValue : Transaction -> TransactionValue
@@ -58,18 +151,14 @@ getTransactionValue (Transaction transaction) =
     transaction
 
 
-getTransaction : TransactionValue -> Result (List ( Field, String )) Transaction
+getTransaction : TransactionValue -> Maybe Transaction
 getTransaction transactionValue =
-    case validateTransaction transactionValue of
+    case validateTransactionValue transactionValue of
         Ok transaction ->
-            Ok (Transaction (fromValid transaction))
+            Just (Transaction (fromValid transaction))
 
-        Err err ->
-            Err err
-
-
-type alias DecimalsDict =
-    Dict String Int
+        Err _ ->
+            Nothing
 
 
 stringToDecimals : String -> Maybe Int
@@ -83,12 +172,10 @@ stringToDecimals str =
             )
 
 
-transactionsToDecimals :
-    List Transaction
-    -> DecimalsDict
-transactionsToDecimals transactions =
-    List.foldl
-        (\transaction decimals ->
+transactionsToDecimals : TransactionsDict -> DecimalsDict
+transactionsToDecimals transactionsDict =
+    Dict.foldl
+        (\_ transaction decimals ->
             let
                 { price, currency } =
                     getTransactionValue transaction
@@ -116,7 +203,7 @@ transactionsToDecimals transactions =
                 |> withDefault decimals
         )
         Dict.empty
-        transactions
+        transactionsDict
 
 
 ifValidDate : (subject -> String) -> error -> Validator error subject
@@ -261,6 +348,142 @@ transactionValidator =
         ]
 
 
-validateTransaction : TransactionValue -> Result (List ( Field, String )) (Validate.Valid TransactionValue)
-validateTransaction transactionValue =
+validateTransactionValue : TransactionValue -> Result (List ( Field, String )) (Validate.Valid TransactionValue)
+validateTransactionValue transactionValue =
     validate transactionValidator transactionValue
+
+
+type alias TransactionsFromJs =
+    { payload : List (Array String) }
+
+
+stringToTransactionDict :
+    UuidSeed
+    -> String
+    -> ( TransactionsDict, TransactionValueList, UuidSeed )
+stringToTransactionDict uuidSeed string =
+    case
+        Decode.decodeString
+            (Decode.map TransactionsFromJs
+                (Decode.field "payload" (Decode.list (Decode.array Decode.string)))
+            )
+            string
+    of
+        Ok { payload } ->
+            List.foldl
+                (\valueArray ( transactionsDict, transactionValueList, currentUuidSeed ) ->
+                    let
+                        maybeId =
+                            Array.get 8 valueArray
+                                |> Maybe.andThen (\stringId -> Prng.Uuid.fromString stringId)
+
+                        ( id, seed ) =
+                            case maybeId of
+                                Nothing ->
+                                    UuidSeed.getNewUuid currentUuidSeed
+
+                                Just uuid ->
+                                    ( uuid, currentUuidSeed )
+
+                        defaultTransactionValue =
+                            getDefaultTransactionValue id
+
+                        getBoolWithdefault index defaultFn =
+                            case Array.get index valueArray of
+                                Nothing ->
+                                    defaultFn defaultTransactionValue
+
+                                Just isIncomeString ->
+                                    if
+                                        List.member
+                                            isIncomeString
+                                            [ "true", "True", "TRUE", "1" ]
+                                    then
+                                        True
+
+                                    else
+                                        False
+
+                        isIncome =
+                            getBoolWithdefault 0 .isIncome
+
+                        getStringWithdefault index defaultFn =
+                            case Array.get index valueArray of
+                                Nothing ->
+                                    defaultFn defaultTransactionValue
+
+                                Just str ->
+                                    str
+
+                        date =
+                            getStringWithdefault 1 .date
+
+                        category =
+                            getStringWithdefault 2 .category
+
+                        name =
+                            getStringWithdefault 3 .name
+
+                        price =
+                            getStringWithdefault 4 .price
+
+                        amount =
+                            getStringWithdefault 5 .amount
+
+                        description =
+                            getStringWithdefault 6 .description
+
+                        currency =
+                            getStringWithdefault 7 .currency
+
+                        lastUpdated =
+                            Array.get 9 valueArray
+                                |> Maybe.andThen (\str -> String.toInt str)
+                                |> Maybe.map (\int -> Time.millisToPosix int)
+                                |> Maybe.withDefault defaultTransactionValue.lastUpdated
+
+                        isDeleted =
+                            getBoolWithdefault 10 .isDeleted
+
+                        transactionValue : TransactionValue
+                        transactionValue =
+                            { isIncome = isIncome
+                            , date = date
+                            , category = category
+                            , name = name
+                            , price = price
+                            , amount = amount
+                            , description = description
+                            , currency = currency
+                            , id = id
+                            , lastUpdated = lastUpdated
+                            , isDeleted = isDeleted
+                            }
+
+                        idString =
+                            Prng.Uuid.toString transactionValue.id
+                    in
+                    case getTransaction transactionValue of
+                        Just transaction ->
+                            let
+                                newTransactionsDict : TransactionsDict
+                                newTransactionsDict =
+                                    if transactionValue.isDeleted then
+                                        transactionsDict
+
+                                    else
+                                        Dict.insert idString transaction transactionsDict
+                            in
+                            ( newTransactionsDict, transactionValueList, seed )
+
+                        Nothing ->
+                            ( transactionsDict
+                            , transactionValue :: transactionValueList
+                            , seed
+                            )
+                )
+                ( Dict.empty, [], uuidSeed )
+                payload
+
+        Err _ ->
+            ( Dict.empty, [], uuidSeed )

@@ -1,4 +1,14 @@
-module Cred exposing (Cred, CredValue, credToCredValue, credValueToCred, getUsername, tempCred)
+module Cred exposing
+    ( Cred
+    , CredValue
+    , credToCredValue
+    , credValueToCred
+    , getUsername
+    , tempCred
+    , toJsonString
+    )
+
+import Json.Encode as Encode
 
 
 type alias CredValue =
@@ -33,6 +43,16 @@ credValueToCred credValue =
 credToCredValue : Cred -> CredValue
 credToCredValue (Cred credValue) =
     credValue
+
+
+toJsonString : Cred -> String
+toJsonString (Cred { password, username, deviceName }) =
+    Encode.object
+        [ ( "password", Encode.string password )
+        , ( "username", Encode.string username )
+        , ( "deviceName", Encode.string deviceName )
+        ]
+        |> Encode.encode 0
 
 
 tempCred : Cred

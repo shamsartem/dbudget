@@ -6,10 +6,14 @@
   background-color: var(--c-gray-1-7);
 
   &_container {
+    overflow: auto;
     width: 100%;
     max-width: var(--max-page-width);
+    max-height: 100%;
     padding: var(--space-lg);
+    border: 1px solid var(--c-gray-5);
     background-color: var(--c-gray-1);
+    border-radius: var(--bdrs-md);
   }
 
   &_container > *:not(:first-child) {
@@ -26,7 +30,6 @@
     height: 40px;
     align-items: center;
     justify-content: center;
-    background-color: var(--c-black);
     border-radius: 50%;
 
     &::before,

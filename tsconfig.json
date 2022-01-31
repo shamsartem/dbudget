@@ -11,5 +11,5 @@
     "lib": ["ESNext", "DOM", "WebWorker"],
     "sourceMap": true
   },
-  "include": ["./src"]
+  "include": ["./src/application"]
 }

@@ -3,6 +3,8 @@
     "streetsidesoftware.code-spell-checker",
     "elmtooling.elm-ls-vscode",
     "esbenp.prettier-vscode",
-    "stylelint.vscode-stylelint"
+    "stylelint.vscode-stylelint",
+    "vunguyentuan.vscode-css-variables",
+    "dbaeumer.vscode-eslint"
   ]
 }

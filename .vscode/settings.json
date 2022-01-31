@@ -22,5 +22,6 @@
   },
   "[typescript]": {
     "editor.defaultFormatter": "esbenp.prettier-vscode"
-  }
+  },
+  "cssVariables.lookupFiles": ["src/styles/variables.css"]
 }

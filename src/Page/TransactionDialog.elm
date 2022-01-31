@@ -1,12 +1,13 @@
-port module Page.TransactionDialog exposing (..)
+module Page.TransactionDialog exposing (..)
 
+import Browser.Dom exposing (focus)
 import Browser.Events exposing (onKeyDown)
 import Browser.Navigation as Nav
 import Html exposing (..)
-import Html.Attributes exposing (class, id, type_)
+import Html.Attributes exposing (class, id, novalidate, type_)
 import Html.Events exposing (onClick, onSubmit)
-import Json.Decode as Decode exposing (string)
-import Page
+import Json.Decode as Decode
+import Prng.Uuid exposing (Uuid)
 import Route
 import Task
 import Time exposing (Posix)
@@ -15,17 +16,20 @@ import View.Checkbox exposing (viewCheckbox)
 import View.Input exposing (viewInput)
 
 
-port onTransactionDialogInit : { dialogId : String, transactionId : String } -> Cmd msg
-
-
 dialogId : String
 dialogId =
     "transactionDialog"
 
 
+closeButtonId : String
+closeButtonId =
+    "transactionDialogCloseButton"
+
+
 type TransactionDialog
-    = NewTransaction
+    = NewTransaction Uuid
     | EditTransaction Transaction.TransactionValue
+    | InvalidTransaction Transaction.TransactionValue
 
 
 type alias DirtyRecord =
@@ -40,33 +44,26 @@ type alias DirtyRecord =
 
 
 type alias Model =
-    { key : Nav.Key
+    { navKey : Nav.Key
     , transactionView : TransactionDialog
-    , transaction : Transaction.TransactionValue
+    , transactionValue : Transaction.TransactionValue
     , dirtyRecord : DirtyRecord
     }
 
 
-init : Nav.Key -> TransactionDialog -> ( Model, Cmd Msg )
-init key transactionDialog =
-    ( { key = key
+init : { navKey : Nav.Key, transactionDialog : TransactionDialog } -> ( Model, Cmd Msg )
+init { navKey, transactionDialog } =
+    ( { navKey = navKey
       , transactionView = transactionDialog
-      , transaction =
+      , transactionValue =
             case transactionDialog of
-                NewTransaction ->
-                    { isIncome = False
-                    , date = ""
-                    , category = ""
-                    , name = ""
-                    , price = ""
-                    , amount = ""
-                    , description = ""
-                    , currency = ""
-                    , id = ""
-                    , lastUpdated = Time.millisToPosix 0
-                    }
+                NewTransaction uuid ->
+                    Transaction.getDefaultTransactionValue uuid
 
                 EditTransaction transactionValue ->
+                    transactionValue
+
+                InvalidTransaction transactionValue ->
                     transactionValue
       , dirtyRecord =
             { date = False
@@ -78,16 +75,7 @@ init key transactionDialog =
             , currency = False
             }
       }
-    , onTransactionDialogInit
-        { dialogId = dialogId
-        , transactionId =
-            case transactionDialog of
-                NewTransaction ->
-                    Page.newTransactionId
-
-                EditTransaction transactionValue ->
-                    transactionValue.id
-        }
+    , Task.attempt (\_ -> NoOp) (focus closeButtonId)
     )
 
 
@@ -101,15 +89,15 @@ getTime =
 -- VIEW
 
 
-view : Model -> { title : String, content : Html Msg }
-view { transaction, transactionView, dirtyRecord } =
+view : Model -> Html Msg
+view { transactionValue, transactionView, dirtyRecord } =
     let
-        valid =
-            Transaction.validateTransaction transaction
+        validity =
+            Transaction.validateTransactionValue transactionValue
 
         getError : Transaction.Field -> Maybe String
         getError field =
-            case valid of
+            case validity of
                 Ok _ ->
                     Nothing
 
@@ -119,122 +107,122 @@ view { transaction, transactionView, dirtyRecord } =
                         |> List.head
                         |> Maybe.map (\( _, err ) -> err)
     in
-    { title =
-        case transactionView of
-            NewTransaction ->
-                "New transaction"
-
-            EditTransaction _ ->
-                "Edit transaction"
-    , content =
-        div [ class "Transaction fullSize", id dialogId ]
-            [ a [ class "Transaction_closeButton", Route.href Route.TransactionList ]
-                [ span [ class "visuallyHidden" ] [ text "Close" ]
-                ]
-            , form [ class "Transaction_container", onSubmit NoOp ]
-                [ viewCheckbox
-                    { label = "Is Income"
-                    , onCheck = IsIncomeInput
-                    , checked = transaction.isIncome
-                    , required = False
-                    , id = "isIncome"
-                    , otherAttributes = []
-                    }
-                , viewInput
-                    { label = "Date"
-                    , onInput = Input Transaction.Date
-                    , onBlur = Just (Blur Transaction.Date)
-                    , value = transaction.date
-                    , required = True
-                    , id = "date"
-                    , hasPlaceholder = False
-                    , otherAttributes = [ type_ "date" ]
-                    , error = getError Transaction.Date
-                    , warning = Nothing
-                    , dirty = dirtyRecord.date
-                    }
-                , viewInput
-                    { label = "Category"
-                    , onInput = Input Transaction.Category
-                    , onBlur = Just (Blur Transaction.Category)
-                    , value = transaction.category
-                    , required = True
-                    , id = "category"
-                    , hasPlaceholder = False
-                    , otherAttributes = []
-                    , error = getError Transaction.Category
-                    , warning = Nothing
-                    , dirty = dirtyRecord.category
-                    }
-                , viewInput
-                    { label = "Name"
-                    , onInput = Input Transaction.Name
-                    , onBlur = Just (Blur Transaction.Name)
-                    , value = transaction.name
-                    , required = True
-                    , id = "name"
-                    , hasPlaceholder = False
-                    , otherAttributes = []
-                    , error = getError Transaction.Name
-                    , warning = Nothing
-                    , dirty = dirtyRecord.name
-                    }
-                , viewInput
-                    { label = "Price"
-                    , onInput = Input Transaction.Price
-                    , onBlur = Just (Blur Transaction.Price)
-                    , value = transaction.price
-                    , required = True
-                    , id = "price"
-                    , hasPlaceholder = False
-                    , otherAttributes = []
-                    , error = getError Transaction.Price
-                    , warning = Nothing
-                    , dirty = dirtyRecord.price
-                    }
-                , viewInput
-                    { label = "Amount"
-                    , onInput = Input Transaction.Amount
-                    , onBlur = Just (Blur Transaction.Amount)
-                    , value = transaction.amount
-                    , required = False
-                    , id = "amount"
-                    , hasPlaceholder = False
-                    , otherAttributes = []
-                    , error = getError Transaction.Amount
-                    , warning = Nothing
-                    , dirty = dirtyRecord.amount
-                    }
-                , viewInput
-                    { label = "Description"
-                    , onInput = Input Transaction.Description
-                    , onBlur = Nothing
-                    , value = transaction.description
-                    , required = False
-                    , id = "description"
-                    , hasPlaceholder = False
-                    , otherAttributes = []
-                    , error = Nothing
-                    , warning = Nothing
-                    , dirty = dirtyRecord.description
-                    }
-                , viewInput
-                    { label = "Currency"
-                    , onInput = Input Transaction.Currency
-                    , onBlur = Just (Blur Transaction.Currency)
-                    , value = transaction.currency
-                    , required = True
-                    , id = "currency"
-                    , hasPlaceholder = False
-                    , otherAttributes = []
-                    , error = getError Transaction.Currency
-                    , warning = Nothing
-                    , dirty = dirtyRecord.currency
-                    }
-                , button [ class "button", onClick Save ] [ text "save" ]
-                ]
+    div [ class "Transaction fullSize", id dialogId ]
+        [ button [ class "Transaction_closeButton", id closeButtonId, onClick ClosedDialog ]
+            [ span [ class "visuallyHidden" ] [ text "Close" ]
             ]
-    }
+        , form [ class "Transaction_container", novalidate True, onSubmit NoOp ]
+            [ viewCheckbox
+                { label = "Is Income"
+                , onCheck = SetIsIncome
+                , checked = transactionValue.isIncome
+                , required = False
+                , id = "isIncome"
+                , otherAttributes = []
+                }
+            , viewInput
+                { label = "Date"
+                , onInput = SetField Transaction.Date
+                , onBlur = Just (BluredFromField Transaction.Date)
+                , value = transactionValue.date
+                , required = True
+                , id = "date"
+                , hasPlaceholder = False
+                , otherAttributes = [ type_ "date" ]
+                , error = getError Transaction.Date
+                , warning = Nothing
+                , dirty = dirtyRecord.date
+                }
+            , viewInput
+                { label = "Category"
+                , onInput = SetField Transaction.Category
+                , onBlur = Just (BluredFromField Transaction.Category)
+                , value = transactionValue.category
+                , required = True
+                , id = "category"
+                , hasPlaceholder = False
+                , otherAttributes = []
+                , error = getError Transaction.Category
+                , warning = Nothing
+                , dirty = dirtyRecord.category
+                }
+            , viewInput
+                { label = "Name"
+                , onInput = SetField Transaction.Name
+                , onBlur = Just (BluredFromField Transaction.Name)
+                , value = transactionValue.name
+                , required = True
+                , id = "name"
+                , hasPlaceholder = False
+                , otherAttributes = []
+                , error = getError Transaction.Name
+                , warning = Nothing
+                , dirty = dirtyRecord.name
+                }
+            , viewInput
+                { label = "Price"
+                , onInput = SetField Transaction.Price
+                , onBlur = Just (BluredFromField Transaction.Price)
+                , value = transactionValue.price
+                , required = True
+                , id = "price"
+                , hasPlaceholder = False
+                , otherAttributes = []
+                , error = getError Transaction.Price
+                , warning = Nothing
+                , dirty = dirtyRecord.price
+                }
+            , viewInput
+                { label = "Amount"
+                , onInput = SetField Transaction.Amount
+                , onBlur = Just (BluredFromField Transaction.Amount)
+                , value = transactionValue.amount
+                , required = False
+                , id = "amount"
+                , hasPlaceholder = False
+                , otherAttributes = []
+                , error = getError Transaction.Amount
+                , warning = Nothing
+                , dirty = dirtyRecord.amount
+                }
+            , viewInput
+                { label = "Description"
+                , onInput = SetField Transaction.Description
+                , onBlur = Nothing
+                , value = transactionValue.description
+                , required = False
+                , id = "description"
+                , hasPlaceholder = False
+                , otherAttributes = []
+                , error = Nothing
+                , warning = Nothing
+                , dirty = dirtyRecord.description
+                }
+            , viewInput
+                { label = "Currency"
+                , onInput = SetField Transaction.Currency
+                , onBlur = Just (BluredFromField Transaction.Currency)
+                , value = transactionValue.currency
+                , required = True
+                , id = "currency"
+                , hasPlaceholder = False
+                , otherAttributes = []
+                , error = getError Transaction.Currency
+                , warning = Nothing
+                , dirty = dirtyRecord.currency
+                }
+            , case transactionView of
+                NewTransaction _ ->
+                    text ""
+
+                EditTransaction _ ->
+                    button [ class "button", onClick DeleteExistingTransaction ] [ text "Delete" ]
+
+                InvalidTransaction _ ->
+                    button [ class "button" ] [ text "Delete" ]
+            , button [ class "button", onClick Saved ] [ text "Save" ]
+            ]
+        ]
 
 
 
@@ -242,12 +230,13 @@ view { transaction, transactionView, dirtyRecord } =
 
 
 type Msg
-    = Close
-    | IsIncomeInput Bool
-    | Input Transaction.Field String
-    | Blur Transaction.Field
+    = ClosedDialog
+    | SetIsIncome Bool
+    | SetField Transaction.Field String
+    | BluredFromField Transaction.Field
     | GotTimeNow Posix
-    | Save
+    | Saved
+    | DeleteExistingTransaction
     | NoOp
 
 
@@ -260,7 +249,7 @@ toEscKey : String -> Msg
 toEscKey string =
     case string of
         "Escape" ->
-            Close
+            ClosedDialog
 
         _ ->
             NoOp
@@ -270,21 +259,21 @@ update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     let
         updateTransactionForm : (Transaction.TransactionValue -> Transaction.TransactionValue) -> Model -> ( Model, Cmd Msg )
-        updateTransactionForm transform { transaction } =
-            ( { model | transaction = transform transaction }, Cmd.none )
+        updateTransactionForm transform { transactionValue } =
+            ( { model | transactionValue = transform transactionValue }, Cmd.none )
 
         updateDirtyRecord : (DirtyRecord -> DirtyRecord) -> Model -> ( Model, Cmd Msg )
         updateDirtyRecord transform { dirtyRecord } =
             ( { model | dirtyRecord = transform dirtyRecord }, Cmd.none )
     in
     case msg of
-        Close ->
-            ( model, Route.pushUrl model.key Route.TransactionList )
+        ClosedDialog ->
+            ( model, Route.pushUrl model.navKey Route.TransactionList )
 
-        IsIncomeInput bool ->
+        SetIsIncome bool ->
             updateTransactionForm (\val -> { val | isIncome = bool }) model
 
-        Input field str ->
+        SetField field str ->
             case field of
                 Transaction.Date ->
                     updateTransactionForm (\val -> { val | date = str }) model
@@ -307,7 +296,7 @@ update msg model =
                 Transaction.Currency ->
                     updateTransactionForm (\val -> { val | currency = str }) model
 
-        Blur field ->
+        BluredFromField field ->
             case field of
                 Transaction.Date ->
                     updateDirtyRecord (\val -> { val | date = True }) model
@@ -336,11 +325,26 @@ update msg model =
         GotTimeNow posixTime ->
             let
                 transaction =
-                    model.transaction
+                    model.transactionValue
             in
-            ( { model | transaction = { transaction | lastUpdated = posixTime } }, Cmd.none )
+            ( { model | transactionValue = { transaction | lastUpdated = posixTime } }, Cmd.none )
 
-        Save ->
+        Saved ->
+            ( { model
+                | dirtyRecord =
+                    { date = True
+                    , category = True
+                    , name = True
+                    , price = True
+                    , amount = True
+                    , description = True
+                    , currency = True
+                    }
+              }
+            , Cmd.none
+            )
+
+        DeleteExistingTransaction ->
             ( model, Cmd.none )
 
 
