@@ -71,8 +71,8 @@
   --h-danger: 0;
   --s-danger: 50%;
   --l-danger-dark: 30%;
-  --l-danger: 60%;
-  --l-danger-light: 90%;
+  --l-danger: 50%;
+  --l-danger-light: 70%;
   --c-danger-dark:
     hsl(
       var(--h-danger),

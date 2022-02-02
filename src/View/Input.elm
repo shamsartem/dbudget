@@ -47,10 +47,15 @@ viewInput config =
                 [ i
                     [ attribute "aria-hidden" "true"
                     , class "Input_required"
+                    , classList
+                        [ ( "Input_required__visible"
+                          , config.required
+                          )
+                        ]
                     , title "required"
                     ]
                     [ text "*" ]
-                , i [ class "visuallyHidden" ] [ text "required" ]
+                , i [ class "visuallyHidden" ] [ text "required " ]
                 ]
 
             else
@@ -67,12 +72,17 @@ viewInput config =
                     ]
                 ]
             <|
-                text config.label
-                    :: requiredstar
+                List.append
+                    requiredstar
+                    [ text config.label ]
 
         defaultinputattributes =
             List.append
                 [ class "Input_input"
+                , classList
+                    [ ( "Input_input__hasErrors", config.dirty && config.error /= Nothing )
+                    , ( "Input_input__isHighlighted", config.warning /= Nothing )
+                    ]
                 , onInput config.onInput
                 , value config.value
                 , id config.id
@@ -117,10 +127,10 @@ viewInput config =
                     onBlur blurhandler :: attrs
 
         inputhtml =
-            [ ( "1", input inputattributes [] )
-            , ( "2"
+            [ ( "1"
               , viewlabel
               )
+            , ( "2", input inputattributes [] )
             ]
     in
     Keyed.node "div"
@@ -128,18 +138,33 @@ viewInput config =
         (if config.dirty then
             case config.error of
                 Nothing ->
-                    inputhtml
+                    List.append inputhtml
+                        [ ( "3"
+                          , div
+                                [ class "Input_error"
+                                ]
+                                []
+                          )
+                        ]
 
                 Just error ->
-                    ( "3"
-                    , div
-                        [ class "Input_error"
-                        , id errorId
+                    List.append inputhtml
+                        [ ( "3"
+                          , div
+                                [ class "Input_error Input_error__visible"
+                                , id errorId
+                                ]
+                                [ text error ]
+                          )
                         ]
-                        [ text error ]
-                    )
-                        :: inputhtml
 
          else
-            inputhtml
+            List.append inputhtml
+                [ ( "3"
+                  , div
+                        [ class "Input_error"
+                        ]
+                        []
+                  )
+                ]
         )

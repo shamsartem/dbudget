@@ -17,7 +17,7 @@
     transition: background-color var(--t);
     white-space: nowrap;
 
-    &.active {
+    &__active {
       background-color: var(--c-gray-3);
     }
 

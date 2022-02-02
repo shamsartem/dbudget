@@ -11,7 +11,7 @@ import Prng.Uuid exposing (Uuid)
 import Route
 import Task
 import Time exposing (Posix)
-import Transaction exposing (Field(..))
+import Transaction exposing (DecimalsDict, Field(..))
 import View.Checkbox exposing (viewCheckbox)
 import View.Input exposing (viewInput)
 
@@ -48,12 +48,14 @@ type alias Model =
     , transactionView : TransactionDialog
     , transactionValue : Transaction.TransactionValue
     , dirtyRecord : DirtyRecord
+    , decimalsDict : DecimalsDict
     }
 
 
-init : { navKey : Nav.Key, transactionDialog : TransactionDialog } -> ( Model, Cmd Msg )
-init { navKey, transactionDialog } =
+init : { navKey : Nav.Key, transactionDialog : TransactionDialog, decimalsDict : DecimalsDict } -> ( Model, Cmd Msg )
+init { navKey, transactionDialog, decimalsDict } =
     ( { navKey = navKey
+      , decimalsDict = decimalsDict
       , transactionView = transactionDialog
       , transactionValue =
             case transactionDialog of
@@ -90,7 +92,7 @@ getTime =
 
 
 view : Model -> Html Msg
-view { transactionValue, transactionView, dirtyRecord } =
+view { transactionValue, transactionView, dirtyRecord, decimalsDict } =
     let
         validity =
             Transaction.validateTransactionValue transactionValue
@@ -211,6 +213,14 @@ view { transactionValue, transactionView, dirtyRecord } =
                 , warning = Nothing
                 , dirty = dirtyRecord.currency
                 }
+            , div [ class "Transaction_fullPrice" ]
+                [ case Transaction.getFullPrice transactionValue decimalsDict of
+                    Just fullPrice ->
+                        text fullPrice
+
+                    Nothing ->
+                        text ""
+                ]
             , case transactionView of
                 NewTransaction _ ->
                     text ""

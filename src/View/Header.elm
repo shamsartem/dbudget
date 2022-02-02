@@ -41,7 +41,7 @@ headerLink page route linkcontent =
     a
         [ class "Header_link"
         , classList
-            [ ( "active"
+            [ ( "Header_link__active"
               , isActive page route
               )
             ]

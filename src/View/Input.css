@@ -1,7 +1,7 @@
 .Input {
   position: relative;
   display: flex;
-  flex-direction: column-reverse;
+  flex-direction: column;
 
   &_input {
     height: 30px;
@@ -16,13 +16,16 @@
       border-color: var(--c-gray-9);
     }
 
-    &.isHighlighted {
+    &__isHighlighted {
       background-color: var(--c-warning-dark);
     }
 
-    &.hasErrors {
+    &__hasErrors {
       border-color: var(--c-danger);
-      margin-bottom: 16px;
+
+      &:focus {
+        border-color: var(--c-danger-light);
+      }
     }
 
     &::placeholder {
@@ -36,58 +39,28 @@
     max-width: 100%;
     margin-bottom: 3px;
     line-height: var(--lh-sm);
-
-    &.isCheckbox {
-      --before-size: 20px;
-
-      padding-left: calc(var(--before-size) + 10px);
-
-      &::before,
-      &::after {
-        --size: var(--before-size);
-
-        position: absolute;
-        top: 0;
-        left: 0;
-        width: var(--size);
-        height: var(--size);
-        content: '';
-      }
-
-      &::before {
-        border: 1px solid var(--c-gray-4);
-        border-radius: var(--bdrs-md);
-        transition: border-color 0.3s ease-in-out;
-      }
-
-      &:hover::before {
-        border-color: var(--c-gray-6);
-      }
-
-      &::after {
-        --size: 12px;
-        --size-diff: calc(var(--before-size) - var(--size));
-        --offset: calc(var(--size-diff) / 2);
-
-        top: var(--offset);
-        left: var(--offset);
-        background-color: var(--c-gray-5);
-        border-radius: var(--bdrs-sm);
-        opacity: 0;
-      }
-    }
   }
 
   &_required {
     display: none;
+    margin-right: 5px;
 
-    :required + label > & {
+    &__visible {
       display: block;
-      margin-left: 5px;
     }
   }
 
   &_error {
+    overflow: hidden;
+    height: 17px;
+    margin-top: 2px;
     color: var(--c-danger);
+    text-overflow: ellipsis;
+    visibility: hidden;
+    white-space: nowrap;
+
+    &__visible {
+      visibility: visible;
+    }
   }
 }

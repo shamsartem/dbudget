@@ -216,6 +216,7 @@ changeRouteTo maybeRoute model =
                             TransactionDialog.init
                                 { navKey = model.navKey
                                 , transactionDialog = TransactionDialog.NewTransaction newUuid
+                                , decimalsDict = Transaction.getDecimalsDict model.transactions
                                 }
 
                         ( transactionListModel, transactionListCmd ) =
@@ -249,6 +250,7 @@ changeRouteTo maybeRoute model =
                                                 , transactionDialog =
                                                     TransactionDialog.EditTransaction
                                                         (getTransactionValue transaction)
+                                                , decimalsDict = Transaction.getDecimalsDict model.transactions
                                                 }
 
                                         ( transactionListModel, transactionListCmd ) =
@@ -341,6 +343,7 @@ update message model =
                                             TransactionDialog.init
                                                 { navKey = model.navKey
                                                 , transactionDialog = TransactionDialog.InvalidTransaction invalidTransaction
+                                                , decimalsDict = Transaction.getDecimalsDict model.transactions
                                                 }
                                     in
                                     ( { model

@@ -48,7 +48,7 @@
     padding: var(--space-md);
     border-bottom: 1px solid var(--c-gray-4);
 
-    &.isIncome {
+    &__isIncome {
       background-color: var(--c-gray-2);
     }
   }
