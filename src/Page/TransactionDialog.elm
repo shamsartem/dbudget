@@ -4,7 +4,7 @@ import Browser.Dom exposing (focus)
 import Browser.Events exposing (onKeyDown)
 import Browser.Navigation as Nav
 import Html exposing (..)
-import Html.Attributes exposing (class, id, novalidate, type_)
+import Html.Attributes exposing (class, disabled, id, novalidate, type_)
 import Html.Events exposing (onClick, onSubmit)
 import Json.Decode as Decode
 import Prng.Uuid exposing (Uuid)
@@ -50,6 +50,8 @@ type alias Model =
     , transactionView : TransactionDialog
     , dirtyRecord : DirtyRecord
     , decimalsDict : DecimalsDict
+    , isButtonsDisabled : Bool
+    , currentTimeZone : Maybe Time.Zone
     }
 
 
@@ -67,15 +69,21 @@ init { navKey, transactionDialog, decimalsDict } =
             , description = False
             , currency = False
             }
+      , isButtonsDisabled = False
+      , currentTimeZone = Nothing
       }
-    , Task.attempt (\_ -> NoOp) (focus closeButtonId)
+    , Cmd.batch
+        [ Task.attempt (\_ -> NoOp) (focus closeButtonId)
+        , Time.here
+            |> Task.perform GotTimeZone
+        ]
     )
 
 
-getTime : Cmd Msg
-getTime =
+getTime : (Posix -> Msg) -> Cmd Msg
+getTime msg =
     Time.now
-        |> Task.perform GotTimeNow
+        |> Task.perform msg
 
 
 
@@ -110,6 +118,7 @@ loadingView =
         , text "You will be able to edit transaction after loading is finished"
         ]
 
+
 noTransactionWithThisIdView : Html Msg
 noTransactionWithThisIdView =
     div [ class "Transaction fullSize", id dialogId ]
@@ -120,8 +129,73 @@ noTransactionWithThisIdView =
         ]
 
 
+monthToString : Time.Month -> String
+monthToString month =
+    case month of
+        Time.Jan ->
+            "Jan"
+
+        Time.Feb ->
+            "Feb"
+
+        Time.Mar ->
+            "Mar"
+
+        Time.Apr ->
+            "Apr"
+
+        Time.May ->
+            "May"
+
+        Time.Jun ->
+            "Jun"
+
+        Time.Jul ->
+            "Jul"
+
+        Time.Aug ->
+            "Aug"
+
+        Time.Sep ->
+            "Sep"
+
+        Time.Oct ->
+            "Oct"
+
+        Time.Nov ->
+            "Nov"
+
+        Time.Dec ->
+            "Dec"
+
+
+viewLastUpdated : Maybe Time.Zone -> Posix -> Html Msg
+viewLastUpdated currentTimeZone lastUpdated =
+    case currentTimeZone of
+        Just zone ->
+            div [ class "Transaction_lastUpdated" ]
+                [ text
+                    ("Last updated: "
+                        ++ String.fromInt (Time.toDay zone lastUpdated)
+                        ++ " "
+                        ++ monthToString (Time.toMonth zone lastUpdated)
+                        ++ " "
+                        ++ String.fromInt (Time.toYear zone lastUpdated)
+                        ++ " "
+                        ++ String.fromInt (Time.toHour zone lastUpdated)
+                        ++ ":"
+                        ++ String.fromInt (Time.toMinute zone lastUpdated)
+                        ++ ":"
+                        ++ String.fromInt (Time.toSecond zone lastUpdated)
+                    )
+                ]
+
+        Nothing ->
+            text ""
+
+
 viewWithTransactionValue : Transaction.TransactionValue -> Model -> Html Msg
-viewWithTransactionValue transactionValue { transactionView, dirtyRecord, decimalsDict } =
+viewWithTransactionValue transactionValue { transactionView, dirtyRecord, decimalsDict, isButtonsDisabled, currentTimeZone } =
     let
         validity =
             Transaction.validateTransactionValue transactionValue
@@ -143,14 +217,16 @@ viewWithTransactionValue transactionValue { transactionView, dirtyRecord, decima
             [ span [ class "visuallyHidden" ] [ text "Close" ]
             ]
         , form [ class "Transaction_container", novalidate True, onSubmit NoOp ]
-            [ viewCheckbox
-                { label = "Is Income"
-                , onCheck = SetIsIncome
-                , checked = transactionValue.isIncome
-                , required = False
-                , id = "isIncome"
-                , otherAttributes = []
-                }
+            [ div [ class "Transaction_checkBoxWrapper" ]
+                [ viewCheckbox
+                    { label = "Is Income"
+                    , onCheck = SetIsIncome
+                    , checked = transactionValue.isIncome
+                    , required = False
+                    , id = "isIncome"
+                    , otherAttributes = []
+                    }
+                ]
             , viewInput
                 { label = "Date"
                 , onInput = SetField Transaction.Date
@@ -251,21 +327,16 @@ viewWithTransactionValue transactionValue { transactionView, dirtyRecord, decima
                         text ""
                 ]
             , case transactionView of
-                NewTransaction _ ->
-                    text ""
-
                 EditTransaction _ ->
-                    button [ class "button", onClick DeleteExistingTransaction ] [ text "Delete" ]
+                    button [ class "button Transaction_button", onClick BeforeDelete, disabled isButtonsDisabled ] [ text "Delete" ]
 
                 InvalidTransaction _ ->
-                    button [ class "button" ] [ text "Delete" ]
+                    button [ class "button Transaction_button", disabled isButtonsDisabled ] [ text "Delete" ]
 
-                LoadingTransactions ->
+                _ ->
                     text ""
-
-                NoTransactionWithThisId ->
-                    text ""
-            , button [ class "button", onClick Saved ] [ text "Save" ]
+            , button [ class "button Transaction_button", onClick BeforeSave, disabled isButtonsDisabled ] [ text "Save" ]
+            , viewLastUpdated currentTimeZone transactionValue.lastUpdated
             ]
         ]
 
@@ -279,10 +350,14 @@ type Msg
     | SetIsIncome Bool
     | SetField Transaction.Field String
     | BluredFromField Transaction.Field
-    | GotTimeNow Posix
+    | GotTimeNowBeforeSave Posix
+    | GotTimeNowBeforeDelete Posix
     | Saved
     | DeleteExistingTransaction
     | NoOp
+    | BeforeSave
+    | BeforeDelete
+    | GotTimeZone Time.Zone
 
 
 escDecoder : Decode.Decoder Msg
@@ -309,21 +384,23 @@ update msg model =
                 normalUpdate transactionValue tag =
                     ( { model | transactionView = tag (transform transactionValue) }, Cmd.none )
 
-                loadingAndNoTransactionUpdate = 
+                loadingAndNoTransactionUpdate =
                     case msg of
                         ClosedDialog ->
                             ( model, Route.pushUrl model.navKey Route.TransactionList )
-                        _ -> (model, Cmd.none)
+
+                        _ ->
+                            ( model, Cmd.none )
             in
             case model.transactionView of
                 NewTransaction transactionValue ->
                     normalUpdate transactionValue NewTransaction
 
                 EditTransaction transactionValue ->
-                    normalUpdate transactionValue NewTransaction
+                    normalUpdate transactionValue EditTransaction
 
                 InvalidTransaction transactionValue ->
-                    normalUpdate transactionValue NewTransaction
+                    normalUpdate transactionValue InvalidTransaction
 
                 LoadingTransactions ->
                     loadingAndNoTransactionUpdate
@@ -334,8 +411,52 @@ update msg model =
         updateDirtyRecord : (DirtyRecord -> DirtyRecord) -> Model -> ( Model, Cmd Msg )
         updateDirtyRecord transform { dirtyRecord } =
             ( { model | dirtyRecord = transform dirtyRecord }, Cmd.none )
+
+        updateGotTimeNow posixTime message =
+            let
+                normalUpdate transactionValue tag =
+                    let
+                        ( newModel, newMessage ) =
+                            update message
+                                { model
+                                    | transactionView =
+                                        tag
+                                            { transactionValue
+                                                | lastUpdated = posixTime
+                                            }
+                                }
+                    in
+                    ( newModel
+                    , Cmd.batch
+                        [ newMessage
+
+                        -- trigger update from Main
+                        , Task.perform
+                            (\_ -> message)
+                            (Task.succeed message)
+                        ]
+                    )
+            in
+            case model.transactionView of
+                NewTransaction transactionValue ->
+                    normalUpdate transactionValue NewTransaction
+
+                EditTransaction transactionValue ->
+                    normalUpdate transactionValue EditTransaction
+
+                InvalidTransaction transactionValue ->
+                    normalUpdate transactionValue InvalidTransaction
+
+                LoadingTransactions ->
+                    ( model, Cmd.none )
+
+                NoTransactionWithThisId ->
+                    ( model, Cmd.none )
     in
     case msg of
+        GotTimeZone zone ->
+            ( { model | currentTimeZone = Just zone }, Cmd.none )
+
         ClosedDialog ->
             ( model, Route.pushUrl model.navKey Route.TransactionList )
 
@@ -391,26 +512,17 @@ update msg model =
         NoOp ->
             ( model, Cmd.none )
 
-        GotTimeNow posixTime ->
-            let
-                normalUpdate transactionValue tag =
-                    ( { model | transactionView = tag { transactionValue | lastUpdated = posixTime } }, Cmd.none )
-            in
-            case model.transactionView of
-                NewTransaction transactionValue ->
-                    normalUpdate transactionValue NewTransaction
+        GotTimeNowBeforeSave posixTime ->
+            updateGotTimeNow posixTime Saved
 
-                EditTransaction transactionValue ->
-                    normalUpdate transactionValue NewTransaction
+        GotTimeNowBeforeDelete posixTime ->
+            updateGotTimeNow posixTime DeleteExistingTransaction
 
-                InvalidTransaction transactionValue ->
-                    normalUpdate transactionValue NewTransaction
+        BeforeSave ->
+            ( model, getTime GotTimeNowBeforeSave )
 
-                LoadingTransactions ->
-                    ( model, Cmd.none )
-
-                NoTransactionWithThisId ->
-                    ( model, Cmd.none )
+        BeforeDelete ->
+            ( model, getTime GotTimeNowBeforeDelete )
 
         Saved ->
             ( { model

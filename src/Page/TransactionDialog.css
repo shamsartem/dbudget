@@ -16,10 +16,6 @@
     border-radius: var(--bdrs-md);
   }
 
-  &_container > *:not(:first-child) {
-    margin-top: var(--space-sm);
-  }
-
   &_closeButton {
     position: absolute;
     z-index: var(--z-default);
@@ -51,12 +47,24 @@
     }
   }
 
+  &_checkBoxWrapper {
+    margin-bottom: 10px;
+  }
+
   &_fullPrice {
     height: 20px;
   }
 
-  .button {
+  &_button {
     width: 100%;
     margin-top: var(--space-md);
+
+    &:disabled {
+      opacity: 0.2;
+    }
+  }
+
+  &_lastUpdated {
+    margin-top: 15px;
   }
 }
