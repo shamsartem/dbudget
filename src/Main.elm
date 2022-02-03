@@ -124,6 +124,12 @@ getTitle { pageModel, dialogModel } =
                 TransactionDialog.InvalidTransaction _ ->
                     getFullTitle "Invalid Transaction"
 
+                TransactionDialog.LoadingTransactions ->
+                    getFullTitle "Loading Transactions"
+
+                TransactionDialog.NoTransactionWithThisId ->
+                    getFullTitle "No transaction with this id"
+
         ( TransactionList _, _ ) ->
             getFullTitle "Transactions"
 
@@ -215,7 +221,9 @@ changeRouteTo maybeRoute model =
                         ( transactionDialogModel, transactionDialogCmd ) =
                             TransactionDialog.init
                                 { navKey = model.navKey
-                                , transactionDialog = TransactionDialog.NewTransaction newUuid
+                                , transactionDialog =
+                                    TransactionDialog.NewTransaction
+                                        (Transaction.getDefaultTransactionValue newUuid)
                                 , decimalsDict = Transaction.getDecimalsDict model.transactions
                                 }
 
@@ -236,44 +244,52 @@ changeRouteTo maybeRoute model =
 
                 Just (Route.Transaction id) ->
                     let
-                        loadedOrLoading : TransactionsDict -> ( Model, Cmd Msg )
-                        loadedOrLoading transactionsDict =
-                            case Dict.get (Prng.Uuid.toString id) transactionsDict of
-                                Nothing ->
-                                    ( { model | pageModel = NotFound }, Cmd.none )
+                        changeTransactionRoute transactionDialog =
+                            let
+                                ( transactionDialogModel, transactionDialogCmd ) =
+                                    TransactionDialog.init
+                                        { navKey = model.navKey
+                                        , transactionDialog = transactionDialog
+                                        , decimalsDict = Transaction.getDecimalsDict model.transactions
+                                        }
 
-                                Just transaction ->
-                                    let
-                                        ( transactionDialogModel, transactionDialogCmd ) =
-                                            TransactionDialog.init
-                                                { navKey = model.navKey
-                                                , transactionDialog =
-                                                    TransactionDialog.EditTransaction
-                                                        (getTransactionValue transaction)
-                                                , decimalsDict = Transaction.getDecimalsDict model.transactions
-                                                }
-
-                                        ( transactionListModel, transactionListCmd ) =
-                                            TransactionList.init
-                                                { navKey = model.navKey
-                                                }
-                                    in
-                                    ( { model
-                                        | dialogModel = TransactionDialog transactionDialogModel
-                                        , pageModel = TransactionList transactionListModel
-                                      }
-                                    , Cmd.batch
-                                        [ Cmd.map GotTransactionDialogMsg transactionDialogCmd
-                                        , Cmd.map GotTransactionListMsg transactionListCmd
-                                        ]
-                                    )
+                                ( transactionListModel, transactionListCmd ) =
+                                    TransactionList.init
+                                        { navKey = model.navKey
+                                        }
+                            in
+                            ( { model
+                                | dialogModel = TransactionDialog transactionDialogModel
+                                , pageModel = TransactionList transactionListModel
+                              }
+                            , Cmd.batch
+                                [ Cmd.map GotTransactionDialogMsg transactionDialogCmd
+                                , Cmd.map GotTransactionListMsg transactionListCmd
+                                ]
+                            )
                     in
                     case model.transactions of
                         Loaded { transactionsDict } ->
-                            loadedOrLoading transactionsDict
+                            case Dict.get (Prng.Uuid.toString id) transactionsDict of
+                                Nothing ->
+                                    changeTransactionRoute TransactionDialog.NoTransactionWithThisId
+
+                                Just transaction ->
+                                    changeTransactionRoute
+                                        (TransactionDialog.EditTransaction
+                                            (getTransactionValue transaction)
+                                        )
 
                         Loading { transactionsDict } ->
-                            loadedOrLoading transactionsDict
+                            case Dict.get (Prng.Uuid.toString id) transactionsDict of
+                                Nothing ->
+                                    changeTransactionRoute TransactionDialog.LoadingTransactions
+
+                                Just transaction ->
+                                    changeTransactionRoute
+                                        (TransactionDialog.EditTransaction
+                                            (getTransactionValue transaction)
+                                        )
 
                         _ ->
                             ( { model | pageModel = NotFound }, Cmd.none )
@@ -325,16 +341,21 @@ update message model =
                             in
                             case firstInvalidTransaction of
                                 Nothing ->
-                                    ( { model
-                                        | transactions =
-                                            Loaded
-                                                { transactionsDict = transactionsDict
-                                                , decimalsDict = Transaction.transactionsToDecimals transactionsDict
+                                    let
+                                        ( mod, cmd ) =
+                                            changeRouteTo (Route.fromUrl model.url)
+                                                { model
+                                                    | transactions =
+                                                        Loaded
+                                                            { transactionsDict = transactionsDict
+                                                            , decimalsDict = Transaction.transactionsToDecimals transactionsDict
+                                                            }
+                                                    , invalidTransactions = Maybe.withDefault [] (List.tail newInvalidTransactions)
+                                                    , uuidSeed = uuidSeed
                                                 }
-                                        , invalidTransactions = Maybe.withDefault [] (List.tail newInvalidTransactions)
-                                        , uuidSeed = uuidSeed
-                                      }
-                                    , Cmd.none
+                                    in
+                                    ( mod
+                                    , cmd
                                     )
 
                                 Just invalidTransaction ->
@@ -386,10 +407,10 @@ update message model =
                             let
                                 ( m, cmd ) =
                                     changeRouteTo (Route.fromUrl model.url)
-                                        { model | maybeCred = Just cred }
+                                        { model | maybeCred = Just cred, transactions = Loading { transactionsDict = Dict.empty, decimalsDict = Dict.empty } }
                             in
                             -- let users use the app even while we decrypt the data - here we init empty dicts
-                            ( { m | transactions = Loading { transactionsDict = Dict.empty, decimalsDict = Dict.empty } }
+                            ( m
                             , Cmd.batch
                                 [ cmd
                                 , Port.handleSignIn (Cred.toJsonString cred)
@@ -417,128 +438,161 @@ update message model =
             case subMsg of
                 TransactionDialog.Saved ->
                     let
-                        maybeNewTransaction =
-                            getTransaction transactionDialogModel.transactionValue
-                    in
-                    case ( maybeNewTransaction, model.maybeCred ) of
-                        ( Just newTransaction, Just cred ) ->
+                        savedUpdate transactionValue =
                             let
-                                { id } =
-                                    getTransactionValue newTransaction
-
-                                { password } =
-                                    Cred.credToCredValue cred
-
-                                insertTransaction transactionData transactionsDict =
-                                    let
-                                        newTransactionsDict =
-                                            Dict.insert
-                                                (Prng.Uuid.toString id)
-                                                newTransaction
-                                                transactionsDict
-
-                                        newDecimalsDict =
-                                            transactionsToDecimals newTransactionsDict
-                                    in
-                                    ( { model
-                                        | transactions =
-                                            transactionData
-                                                { transactionsDict = newTransactionsDict
-                                                , decimalsDict = newDecimalsDict
-                                                }
-                                      }
-                                    , Cmd.batch
-                                        [ Route.pushUrl
-                                            model.navKey
-                                            Route.TransactionList
-                                        , Port.updatedTransactions
-                                            (Transaction.toJsonValue
-                                                newTransactionsDict
-                                            )
-                                            password
-                                        ]
-                                    )
+                                maybeNewTransaction =
+                                    getTransaction transactionValue
                             in
-                            case model.transactions of
-                                Loading { transactionsDict } ->
-                                    insertTransaction Loading transactionsDict
+                            case ( maybeNewTransaction, model.maybeCred ) of
+                                ( Just newTransaction, Just cred ) ->
+                                    let
+                                        { id } =
+                                            getTransactionValue newTransaction
 
-                                Loaded { transactionsDict } ->
-                                    insertTransaction Loaded transactionsDict
+                                        { password } =
+                                            Cred.credToCredValue cred
 
-                                NotSignedIn ->
+                                        insertTransaction transactionData transactionsDict =
+                                            let
+                                                newTransactionsDict =
+                                                    Dict.insert
+                                                        (Prng.Uuid.toString id)
+                                                        newTransaction
+                                                        transactionsDict
+
+                                                newDecimalsDict =
+                                                    transactionsToDecimals newTransactionsDict
+                                            in
+                                            ( { model
+                                                | transactions =
+                                                    transactionData
+                                                        { transactionsDict = newTransactionsDict
+                                                        , decimalsDict = newDecimalsDict
+                                                        }
+                                              }
+                                            , Cmd.batch
+                                                [ Route.pushUrl
+                                                    model.navKey
+                                                    Route.TransactionList
+                                                , Port.updatedTransactions
+                                                    (Transaction.toJsonValue
+                                                        newTransactionsDict
+                                                    )
+                                                    password
+                                                ]
+                                            )
+                                    in
+                                    case model.transactions of
+                                        Loading { transactionsDict } ->
+                                            insertTransaction Loading transactionsDict
+
+                                        Loaded { transactionsDict } ->
+                                            insertTransaction Loaded transactionsDict
+
+                                        NotSignedIn ->
+                                            normalUpdate ()
+
+                                        Error _ ->
+                                            normalUpdate ()
+
+                                _ ->
                                     normalUpdate ()
+                    in
+                    case transactionDialogModel.transactionView of
+                        TransactionDialog.NewTransaction transactionValue ->
+                            savedUpdate transactionValue
 
-                                Error _ ->
-                                    normalUpdate ()
+                        TransactionDialog.EditTransaction transactionValue ->
+                            savedUpdate transactionValue
 
-                        _ ->
+                        TransactionDialog.InvalidTransaction transactionValue ->
+                            savedUpdate transactionValue
+
+                        TransactionDialog.LoadingTransactions ->
+                            normalUpdate ()
+
+                        TransactionDialog.NoTransactionWithThisId ->
                             normalUpdate ()
 
                 TransactionDialog.DeleteExistingTransaction ->
                     let
-                        transactionValue =
-                            transactionDialogModel.transactionValue
-
-                        newTransactionValue =
-                            { transactionValue | isDeleted = True }
-
-                        maybeNewTransaction =
-                            getTransaction newTransactionValue
-                    in
-                    case ( maybeNewTransaction, model.maybeCred ) of
-                        ( Just newTransaction, Just cred ) ->
+                        deleteUpdate transactionValue =
                             let
-                                removeTransaction transactionData transactionsDict =
-                                    let
-                                        idString =
-                                            Prng.Uuid.toString transactionDialogModel.transactionValue.id
+                                newTransactionValue =
+                                    { transactionValue | isDeleted = True }
 
-                                        transactionsDictToStore =
-                                            Dict.insert
-                                                idString
-                                                newTransaction
-                                                transactionsDict
-
-                                        transactionsDictModel =
-                                            Dict.remove idString transactionsDict
-
-                                        newDecimalsDict =
-                                            transactionsToDecimals transactionsDictModel
-
-                                        { password } =
-                                            Cred.credToCredValue cred
-                                    in
-                                    ( { model
-                                        | transactions =
-                                            transactionData
-                                                { transactionsDict = transactionsDictModel
-                                                , decimalsDict = newDecimalsDict
-                                                }
-                                      }
-                                    , Cmd.batch
-                                        [ Route.pushUrl
-                                            model.navKey
-                                            Route.TransactionList
-                                        , Port.updatedTransactions
-                                            (Transaction.toJsonValue
-                                                transactionsDictToStore
-                                            )
-                                            password
-                                        ]
-                                    )
+                                maybeNewTransaction =
+                                    getTransaction newTransactionValue
                             in
-                            case model.transactions of
-                                Loading { transactionsDict } ->
-                                    removeTransaction Loading transactionsDict
+                            case ( maybeNewTransaction, model.maybeCred ) of
+                                ( Just newTransaction, Just cred ) ->
+                                    let
+                                        removeTransaction transactionData transactionsDict =
+                                            let
+                                                idString =
+                                                    Prng.Uuid.toString transactionValue.id
 
-                                Loaded { transactionsDict } ->
-                                    removeTransaction Loaded transactionsDict
+                                                transactionsDictToStore =
+                                                    Dict.insert
+                                                        idString
+                                                        newTransaction
+                                                        transactionsDict
+
+                                                transactionsDictModel =
+                                                    Dict.remove idString transactionsDict
+
+                                                newDecimalsDict =
+                                                    transactionsToDecimals transactionsDictModel
+
+                                                { password } =
+                                                    Cred.credToCredValue cred
+                                            in
+                                            ( { model
+                                                | transactions =
+                                                    transactionData
+                                                        { transactionsDict = transactionsDictModel
+                                                        , decimalsDict = newDecimalsDict
+                                                        }
+                                              }
+                                            , Cmd.batch
+                                                [ Route.pushUrl
+                                                    model.navKey
+                                                    Route.TransactionList
+                                                , Port.updatedTransactions
+                                                    (Transaction.toJsonValue
+                                                        transactionsDictToStore
+                                                    )
+                                                    password
+                                                ]
+                                            )
+                                    in
+                                    case model.transactions of
+                                        Loading { transactionsDict } ->
+                                            removeTransaction Loading transactionsDict
+
+                                        Loaded { transactionsDict } ->
+                                            removeTransaction Loaded transactionsDict
+
+                                        _ ->
+                                            normalUpdate ()
 
                                 _ ->
                                     normalUpdate ()
+                    in
+                    case transactionDialogModel.transactionView of
+                        TransactionDialog.NewTransaction transactionValue ->
+                            deleteUpdate transactionValue
 
-                        _ ->
+                        TransactionDialog.EditTransaction transactionValue ->
+                            deleteUpdate transactionValue
+
+                        TransactionDialog.InvalidTransaction transactionValue ->
+                            deleteUpdate transactionValue
+
+                        TransactionDialog.LoadingTransactions ->
+                            normalUpdate ()
+
+                        TransactionDialog.NoTransactionWithThisId ->
                             normalUpdate ()
 
                 _ ->

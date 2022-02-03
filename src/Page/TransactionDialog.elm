@@ -27,9 +27,11 @@ closeButtonId =
 
 
 type TransactionDialog
-    = NewTransaction Uuid
+    = NewTransaction Transaction.TransactionValue
     | EditTransaction Transaction.TransactionValue
     | InvalidTransaction Transaction.TransactionValue
+    | LoadingTransactions
+    | NoTransactionWithThisId
 
 
 type alias DirtyRecord =
@@ -46,7 +48,6 @@ type alias DirtyRecord =
 type alias Model =
     { navKey : Nav.Key
     , transactionView : TransactionDialog
-    , transactionValue : Transaction.TransactionValue
     , dirtyRecord : DirtyRecord
     , decimalsDict : DecimalsDict
     }
@@ -57,16 +58,6 @@ init { navKey, transactionDialog, decimalsDict } =
     ( { navKey = navKey
       , decimalsDict = decimalsDict
       , transactionView = transactionDialog
-      , transactionValue =
-            case transactionDialog of
-                NewTransaction uuid ->
-                    Transaction.getDefaultTransactionValue uuid
-
-                EditTransaction transactionValue ->
-                    transactionValue
-
-                InvalidTransaction transactionValue ->
-                    transactionValue
       , dirtyRecord =
             { date = False
             , category = False
@@ -92,7 +83,45 @@ getTime =
 
 
 view : Model -> Html Msg
-view { transactionValue, transactionView, dirtyRecord, decimalsDict } =
+view model =
+    case model.transactionView of
+        NewTransaction transactionValue ->
+            viewWithTransactionValue transactionValue model
+
+        EditTransaction transactionValue ->
+            viewWithTransactionValue transactionValue model
+
+        InvalidTransaction transactionValue ->
+            viewWithTransactionValue transactionValue model
+
+        LoadingTransactions ->
+            loadingView
+
+        NoTransactionWithThisId ->
+            noTransactionWithThisIdView
+
+
+loadingView : Html Msg
+loadingView =
+    div [ class "Transaction fullSize", id dialogId ]
+        [ button [ class "Transaction_closeButton", id closeButtonId, onClick ClosedDialog ]
+            [ span [ class "visuallyHidden" ] [ text "Close" ]
+            ]
+        , text "You will be able to edit transaction after loading is finished"
+        ]
+
+noTransactionWithThisIdView : Html Msg
+noTransactionWithThisIdView =
+    div [ class "Transaction fullSize", id dialogId ]
+        [ button [ class "Transaction_closeButton", id closeButtonId, onClick ClosedDialog ]
+            [ span [ class "visuallyHidden" ] [ text "Close" ]
+            ]
+        , text "There is no transaction with this id"
+        ]
+
+
+viewWithTransactionValue : Transaction.TransactionValue -> Model -> Html Msg
+viewWithTransactionValue transactionValue { transactionView, dirtyRecord, decimalsDict } =
     let
         validity =
             Transaction.validateTransactionValue transactionValue
@@ -230,6 +259,12 @@ view { transactionValue, transactionView, dirtyRecord, decimalsDict } =
 
                 InvalidTransaction _ ->
                     button [ class "button" ] [ text "Delete" ]
+
+                LoadingTransactions ->
+                    text ""
+
+                NoTransactionWithThisId ->
+                    text ""
             , button [ class "button", onClick Saved ] [ text "Save" ]
             ]
         ]
@@ -268,9 +303,33 @@ toEscKey string =
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     let
-        updateTransactionForm : (Transaction.TransactionValue -> Transaction.TransactionValue) -> Model -> ( Model, Cmd Msg )
-        updateTransactionForm transform { transactionValue } =
-            ( { model | transactionValue = transform transactionValue }, Cmd.none )
+        updateTransactionForm : (Transaction.TransactionValue -> Transaction.TransactionValue) -> ( Model, Cmd Msg )
+        updateTransactionForm transform =
+            let
+                normalUpdate transactionValue tag =
+                    ( { model | transactionView = tag (transform transactionValue) }, Cmd.none )
+
+                loadingAndNoTransactionUpdate = 
+                    case msg of
+                        ClosedDialog ->
+                            ( model, Route.pushUrl model.navKey Route.TransactionList )
+                        _ -> (model, Cmd.none)
+            in
+            case model.transactionView of
+                NewTransaction transactionValue ->
+                    normalUpdate transactionValue NewTransaction
+
+                EditTransaction transactionValue ->
+                    normalUpdate transactionValue NewTransaction
+
+                InvalidTransaction transactionValue ->
+                    normalUpdate transactionValue NewTransaction
+
+                LoadingTransactions ->
+                    loadingAndNoTransactionUpdate
+
+                NoTransactionWithThisId ->
+                    loadingAndNoTransactionUpdate
 
         updateDirtyRecord : (DirtyRecord -> DirtyRecord) -> Model -> ( Model, Cmd Msg )
         updateDirtyRecord transform { dirtyRecord } =
@@ -281,30 +340,30 @@ update msg model =
             ( model, Route.pushUrl model.navKey Route.TransactionList )
 
         SetIsIncome bool ->
-            updateTransactionForm (\val -> { val | isIncome = bool }) model
+            updateTransactionForm (\val -> { val | isIncome = bool })
 
         SetField field str ->
             case field of
                 Transaction.Date ->
-                    updateTransactionForm (\val -> { val | date = str }) model
+                    updateTransactionForm (\val -> { val | date = str })
 
                 Transaction.Category ->
-                    updateTransactionForm (\val -> { val | category = str }) model
+                    updateTransactionForm (\val -> { val | category = str })
 
                 Transaction.Name ->
-                    updateTransactionForm (\val -> { val | name = str }) model
+                    updateTransactionForm (\val -> { val | name = str })
 
                 Transaction.Price ->
-                    updateTransactionForm (\val -> { val | price = str }) model
+                    updateTransactionForm (\val -> { val | price = str })
 
                 Transaction.Amount ->
-                    updateTransactionForm (\val -> { val | amount = str }) model
+                    updateTransactionForm (\val -> { val | amount = str })
 
                 Transaction.Description ->
-                    updateTransactionForm (\val -> { val | description = str }) model
+                    updateTransactionForm (\val -> { val | description = str })
 
                 Transaction.Currency ->
-                    updateTransactionForm (\val -> { val | currency = str }) model
+                    updateTransactionForm (\val -> { val | currency = str })
 
         BluredFromField field ->
             case field of
@@ -334,10 +393,24 @@ update msg model =
 
         GotTimeNow posixTime ->
             let
-                transaction =
-                    model.transactionValue
+                normalUpdate transactionValue tag =
+                    ( { model | transactionView = tag { transactionValue | lastUpdated = posixTime } }, Cmd.none )
             in
-            ( { model | transactionValue = { transaction | lastUpdated = posixTime } }, Cmd.none )
+            case model.transactionView of
+                NewTransaction transactionValue ->
+                    normalUpdate transactionValue NewTransaction
+
+                EditTransaction transactionValue ->
+                    normalUpdate transactionValue NewTransaction
+
+                InvalidTransaction transactionValue ->
+                    normalUpdate transactionValue NewTransaction
+
+                LoadingTransactions ->
+                    ( model, Cmd.none )
+
+                NoTransactionWithThisId ->
+                    ( model, Cmd.none )
 
         Saved ->
             ( { model

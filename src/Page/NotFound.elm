@@ -20,8 +20,3 @@ view =
             ]
             [ text "Go to main page" ]
         ]
-
-
-
--- Page.NotFound
--- exposingimportHtmlexposingimportHtml.AttributesexposingimportRouteVIEWview
