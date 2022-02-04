@@ -3,17 +3,17 @@ module Page.TransactionDialog exposing (..)
 import Browser.Dom exposing (focus)
 import Browser.Events exposing (onKeyDown)
 import Browser.Navigation as Nav
+import Dict
 import Html exposing (..)
 import Html.Attributes exposing (class, disabled, id, novalidate, type_)
 import Html.Events exposing (onClick, onSubmit)
 import Json.Decode as Decode
-import Prng.Uuid exposing (Uuid)
 import Route
 import Task
 import Time exposing (Posix)
-import Transaction exposing (DecimalsDict, Field(..))
+import Transaction exposing (DecimalsDict, Field(..), Transactions)
 import View.Checkbox exposing (viewCheckbox)
-import View.Input exposing (viewInput)
+import View.Input as Input
 
 
 dialogId : String
@@ -52,11 +52,75 @@ type alias Model =
     , decimalsDict : DecimalsDict
     , isButtonsDisabled : Bool
     , currentTimeZone : Maybe Time.Zone
+    , transactionValueList : List Transaction.TransactionValue
+    , categories : List String
+    , names : List String
+    , currencies : List String
     }
 
 
-init : { navKey : Nav.Key, transactionDialog : TransactionDialog, decimalsDict : DecimalsDict } -> ( Model, Cmd Msg )
-init { navKey, transactionDialog, decimalsDict } =
+getDataListData :
+    List Transaction.TransactionValue
+    -> TransactionDialog
+    ->
+        { categories : List String
+        , names : List String
+        , currencies : List String
+        }
+getDataListData transactions transactionDialog =
+    let
+        get { isIncome, category, name, currency } =
+            let
+                filteredBasedOnIsIncome =
+                    List.filter
+                        (\transaction -> transaction.isIncome == isIncome)
+                        transactions
+
+                process getValue contains list =
+                    list
+                        |> List.map (\transaction -> getValue transaction)
+                        |> Transaction.sortByPopularity
+                        |> List.filter (\str -> String.contains contains str)
+            in
+            { categories =
+                filteredBasedOnIsIncome
+                    |> List.filter (\transaction -> String.contains category transaction.category)
+                    |> process .category category
+            , names =
+                filteredBasedOnIsIncome
+                    |> List.filter (\transaction -> transaction.category == category)
+                    |> process .name name
+            , currencies =
+                transactions
+                    |> process .currency currency
+            }
+    in
+    case transactionDialog of
+        NewTransaction transactionValue ->
+            get transactionValue
+
+        EditTransaction transactionValue ->
+            get transactionValue
+
+        InvalidTransaction transactionValue ->
+            get transactionValue
+
+        _ ->
+            { categories = [], names = [], currencies = [] }
+
+
+init : { navKey : Nav.Key, transactionDialog : TransactionDialog, transactions : Transactions } -> ( Model, Cmd Msg )
+init { navKey, transactionDialog, transactions } =
+    let
+        decimalsDict =
+            Transaction.getDecimalsDict transactions
+
+        transactionValueList =
+            Transaction.getNotDeletedTransactionValuesList transactions
+
+        { categories, names, currencies } =
+            getDataListData transactionValueList transactionDialog
+    in
     ( { navKey = navKey
       , decimalsDict = decimalsDict
       , transactionView = transactionDialog
@@ -71,6 +135,10 @@ init { navKey, transactionDialog, decimalsDict } =
             }
       , isButtonsDisabled = False
       , currentTimeZone = Nothing
+      , transactionValueList = transactionValueList
+      , categories = categories
+      , names = names
+      , currencies = currencies
       }
     , Cmd.batch
         [ Task.attempt (\_ -> NoOp) (focus closeButtonId)
@@ -195,7 +263,7 @@ viewLastUpdated currentTimeZone lastUpdated =
 
 
 viewWithTransactionValue : Transaction.TransactionValue -> Model -> Html Msg
-viewWithTransactionValue transactionValue { transactionView, dirtyRecord, decimalsDict, isButtonsDisabled, currentTimeZone } =
+viewWithTransactionValue transactionValue { transactionView, dirtyRecord, decimalsDict, isButtonsDisabled, currentTimeZone, categories, names, currencies } =
     let
         validity =
             Transaction.validateTransactionValue transactionValue
@@ -211,6 +279,90 @@ viewWithTransactionValue transactionValue { transactionView, dirtyRecord, decima
                         |> List.filter (\( t, _ ) -> t == field)
                         |> List.head
                         |> Maybe.map (\( _, err ) -> err)
+
+        buttons =
+            div [ class "Transaction_buttons" ]
+                [ case transactionView of
+                    EditTransaction _ ->
+                        button [ class "button Transaction_button", onClick BeforeDelete, disabled isButtonsDisabled ] [ text "Delete" ]
+
+                    InvalidTransaction _ ->
+                        button [ class "button Transaction_button", disabled isButtonsDisabled ] [ text "Delete" ]
+
+                    _ ->
+                        text ""
+                , button [ class "button Transaction_button", onClick BeforeSave, disabled isButtonsDisabled ] [ text "Save" ]
+                ]
+
+        getTextUnderInput field hasWarning warningText =
+            case getError field of
+                Nothing ->
+                    if hasWarning then
+                        Input.Warning (Just warningText)
+
+                    else
+                        Input.Warning Nothing
+
+                Just error ->
+                    Input.Error (Just error)
+
+        newDecimals =
+            Transaction.stringToIntSum transactionValue.price Nothing 0
+                |> Maybe.withDefault { value = 0, decimals = 0 }
+                |> (\{ decimals } -> decimals)
+
+        newDecimalsString =
+            newDecimals
+                |> String.fromInt
+
+        textsUnderInputs =
+            { category =
+                getTextUnderInput Transaction.Category
+                    (List.isEmpty categories)
+                    ("\""
+                        ++ transactionValue.category
+                        ++ "\" will be added as a new Category for your "
+                        ++ (if transactionValue.isIncome then
+                                "Incomes"
+
+                            else
+                                "Expenses"
+                           )
+                        ++ " when you save"
+                    )
+            , name =
+                getTextUnderInput Transaction.Name
+                    (List.isEmpty names)
+                    ("\""
+                        ++ transactionValue.name
+                        ++ "\" will be added to your Category \""
+                        ++ transactionValue.category
+                        ++ "\" when you save"
+                    )
+            , currency =
+                getTextUnderInput Transaction.Currency
+                    (List.isEmpty currencies)
+                    ("\""
+                        ++ transactionValue.currency
+                        ++ "\" will be added as a new currency with "
+                        ++ newDecimalsString
+                        ++ " decimal places"
+                        ++ " when you save"
+                    )
+            , price =
+                getTextUnderInput Transaction.Price
+                    (Dict.get transactionValue.currency decimalsDict
+                        |> Maybe.withDefault 0
+                        |> (\decimalsFromDict -> decimalsFromDict < newDecimals)
+                    )
+                    ("\""
+                        ++ transactionValue.currency
+                        ++ "\" currency will have "
+                        ++ newDecimalsString
+                        ++ " decimal places"
+                        ++ " when you save"
+                    )
+            }
     in
     div [ class "Transaction fullSize", id dialogId ]
         [ button [ class "Transaction_closeButton", id closeButtonId, onClick ClosedDialog ]
@@ -227,7 +379,7 @@ viewWithTransactionValue transactionValue { transactionView, dirtyRecord, decima
                     , otherAttributes = []
                     }
                 ]
-            , viewInput
+            , Input.view
                 { label = "Date"
                 , onInput = SetField Transaction.Date
                 , onBlur = Just (BluredFromField Transaction.Date)
@@ -236,11 +388,11 @@ viewWithTransactionValue transactionValue { transactionView, dirtyRecord, decima
                 , id = "date"
                 , hasPlaceholder = False
                 , otherAttributes = [ type_ "date" ]
-                , error = getError Transaction.Date
-                , warning = Nothing
+                , textUnderInput = Input.Error (getError Transaction.Date)
                 , dirty = dirtyRecord.date
+                , maybeDatalist = Nothing
                 }
-            , viewInput
+            , Input.view
                 { label = "Category"
                 , onInput = SetField Transaction.Category
                 , onBlur = Just (BluredFromField Transaction.Category)
@@ -249,11 +401,11 @@ viewWithTransactionValue transactionValue { transactionView, dirtyRecord, decima
                 , id = "category"
                 , hasPlaceholder = False
                 , otherAttributes = []
-                , error = getError Transaction.Category
-                , warning = Nothing
+                , textUnderInput = textsUnderInputs.category
                 , dirty = dirtyRecord.category
+                , maybeDatalist = Just categories
                 }
-            , viewInput
+            , Input.view
                 { label = "Name"
                 , onInput = SetField Transaction.Name
                 , onBlur = Just (BluredFromField Transaction.Name)
@@ -262,11 +414,11 @@ viewWithTransactionValue transactionValue { transactionView, dirtyRecord, decima
                 , id = "name"
                 , hasPlaceholder = False
                 , otherAttributes = []
-                , error = getError Transaction.Name
-                , warning = Nothing
+                , textUnderInput = textsUnderInputs.name
                 , dirty = dirtyRecord.name
+                , maybeDatalist = Just names
                 }
-            , viewInput
+            , Input.view
                 { label = "Price"
                 , onInput = SetField Transaction.Price
                 , onBlur = Just (BluredFromField Transaction.Price)
@@ -275,11 +427,11 @@ viewWithTransactionValue transactionValue { transactionView, dirtyRecord, decima
                 , id = "price"
                 , hasPlaceholder = False
                 , otherAttributes = []
-                , error = getError Transaction.Price
-                , warning = Nothing
+                , textUnderInput = textsUnderInputs.price
                 , dirty = dirtyRecord.price
+                , maybeDatalist = Nothing
                 }
-            , viewInput
+            , Input.view
                 { label = "Amount"
                 , onInput = SetField Transaction.Amount
                 , onBlur = Just (BluredFromField Transaction.Amount)
@@ -288,11 +440,11 @@ viewWithTransactionValue transactionValue { transactionView, dirtyRecord, decima
                 , id = "amount"
                 , hasPlaceholder = False
                 , otherAttributes = []
-                , error = getError Transaction.Amount
-                , warning = Nothing
+                , textUnderInput = Input.Error (getError Transaction.Amount)
                 , dirty = dirtyRecord.amount
+                , maybeDatalist = Nothing
                 }
-            , viewInput
+            , Input.view
                 { label = "Description"
                 , onInput = SetField Transaction.Description
                 , onBlur = Nothing
@@ -301,11 +453,11 @@ viewWithTransactionValue transactionValue { transactionView, dirtyRecord, decima
                 , id = "description"
                 , hasPlaceholder = False
                 , otherAttributes = []
-                , error = Nothing
-                , warning = Nothing
+                , textUnderInput = Input.Error Nothing
                 , dirty = dirtyRecord.description
+                , maybeDatalist = Nothing
                 }
-            , viewInput
+            , Input.view
                 { label = "Currency"
                 , onInput = SetField Transaction.Currency
                 , onBlur = Just (BluredFromField Transaction.Currency)
@@ -314,9 +466,9 @@ viewWithTransactionValue transactionValue { transactionView, dirtyRecord, decima
                 , id = "currency"
                 , hasPlaceholder = False
                 , otherAttributes = []
-                , error = getError Transaction.Currency
-                , warning = Nothing
+                , textUnderInput = textsUnderInputs.currency
                 , dirty = dirtyRecord.currency
+                , maybeDatalist = Just currencies
                 }
             , div [ class "Transaction_fullPrice" ]
                 [ case Transaction.getFullPrice transactionValue decimalsDict of
@@ -326,16 +478,7 @@ viewWithTransactionValue transactionValue { transactionView, dirtyRecord, decima
                     Nothing ->
                         text ""
                 ]
-            , case transactionView of
-                EditTransaction _ ->
-                    button [ class "button Transaction_button", onClick BeforeDelete, disabled isButtonsDisabled ] [ text "Delete" ]
-
-                InvalidTransaction _ ->
-                    button [ class "button Transaction_button", disabled isButtonsDisabled ] [ text "Delete" ]
-
-                _ ->
-                    text ""
-            , button [ class "button Transaction_button", onClick BeforeSave, disabled isButtonsDisabled ] [ text "Save" ]
+            , buttons
             , viewLastUpdated currentTimeZone transactionValue.lastUpdated
             ]
         ]
@@ -381,8 +524,23 @@ update msg model =
         updateTransactionForm : (Transaction.TransactionValue -> Transaction.TransactionValue) -> ( Model, Cmd Msg )
         updateTransactionForm transform =
             let
+                normalUpdate : Transaction.TransactionValue -> (Transaction.TransactionValue -> TransactionDialog) -> ( Model, Cmd Msg )
                 normalUpdate transactionValue tag =
-                    ( { model | transactionView = tag (transform transactionValue) }, Cmd.none )
+                    let
+                        transactionDialog =
+                            tag (transform transactionValue)
+
+                        { categories, names, currencies } =
+                            getDataListData model.transactionValueList transactionDialog
+                    in
+                    ( { model
+                        | transactionView = transactionDialog
+                        , categories = categories
+                        , names = names
+                        , currencies = currencies
+                      }
+                    , Cmd.none
+                    )
 
                 loadingAndNoTransactionUpdate =
                     case msg of

@@ -32,7 +32,7 @@ viewHeader page =
     nav [ class "Header" ]
         [ linkto Route.TransactionList [ text "Transactions" ]
         , linkto Route.CSV [ text "CSV" ]
-        , button [ class "Header_link" ] [ text "Log out" ]
+        , linkto Route.LogOut [ text "Log out" ]
         ]
 
 

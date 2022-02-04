@@ -4,7 +4,6 @@ import Prng.Uuid as Uuid exposing (Uuid)
 import Random.Pcg.Extended exposing (Seed, initialSeed, step)
 import Url.Parser exposing (Parser)
 
-
 type UuidSeed
     = UuidSeed Seed
 

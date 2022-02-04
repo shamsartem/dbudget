@@ -18,7 +18,7 @@ type Route
     | TransactionNew
     | Transaction Uuid
     | CSV
-
+    | LogOut
 
 routeParser : Parser (Route -> a) a
 routeParser =
@@ -27,6 +27,7 @@ routeParser =
         , Parser.map TransactionNew (s "transaction" </> s "new")
         , Parser.map Transaction (s "transaction" </> UuidSeed.urlParser)
         , Parser.map CSV (s "csv")
+        , Parser.map LogOut (s "logout" )
         ]
 
 
@@ -81,3 +82,6 @@ routetopath page =
 
         CSV ->
             [ "csv" ]
+
+        LogOut ->
+            [ "logout" ]

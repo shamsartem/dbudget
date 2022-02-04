@@ -18,7 +18,7 @@ import Transaction
         , getTransactionValue
         )
 import View.Header as Header exposing (viewHeader)
-import View.Input exposing (viewInput)
+import View.Input as Input
 
 
 type alias DisplayedTransaction =
@@ -145,7 +145,7 @@ view transactions model =
         [ viewHeader Header.TransactionList
         , form [ c "searchContainer" ]
             [ div [ c "search" ]
-                [ viewInput
+                [ Input.view
                     { label = "search"
                     , onInput = SearchInput
                     , onBlur = Nothing
@@ -154,9 +154,9 @@ view transactions model =
                     , id = "login"
                     , hasPlaceholder = True
                     , otherAttributes = []
-                    , error = Nothing
-                    , warning = Nothing
+                    , textUnderInput = Input.NoText
                     , dirty = False
+                    , maybeDatalist = Nothing
                     }
                 ]
             ]

@@ -1,6 +1,7 @@
 module View.Input exposing
     ( Config
-    , viewInput
+    , TextUnderInput(..)
+    , view
     )
 
 import Html exposing (..)
@@ -24,9 +25,14 @@ import Html.Events
 import Html.Keyed as Keyed
 
 
+type TextUnderInput
+    = NoText
+    | Error (Maybe String)
+    | Warning (Maybe String)
+
+
 type alias Config msg =
     { dirty : Bool
-    , error : Maybe String
     , hasPlaceholder : Bool
     , id : String
     , label : String
@@ -35,12 +41,18 @@ type alias Config msg =
     , otherAttributes : List (Attribute msg)
     , required : Bool
     , value : String
-    , warning : Maybe String
+    , textUnderInput : TextUnderInput
+    , maybeDatalist : Maybe (List String)
     }
 
 
-viewInput : Config msg -> Html msg
-viewInput config =
+textDivKey : String
+textDivKey =
+    "3"
+
+
+view : Config msg -> Html msg
+view config =
     let
         requiredstar =
             if config.required then
@@ -80,8 +92,32 @@ viewInput config =
             List.append
                 [ class "Input_input"
                 , classList
-                    [ ( "Input_input__hasErrors", config.dirty && config.error /= Nothing )
-                    , ( "Input_input__isHighlighted", config.warning /= Nothing )
+                    [ ( "Input_input__hasErrors"
+                      , case config.textUnderInput of
+                            Error maybeError ->
+                                case maybeError of
+                                    Nothing ->
+                                        False
+
+                                    Just _ ->
+                                        config.dirty
+
+                            _ ->
+                                False
+                      )
+                    , ( "Input_input__isHighlighted"
+                      , case config.textUnderInput of
+                            Warning maybeWarning ->
+                                case maybeWarning of
+                                    Nothing ->
+                                        False
+
+                                    Just _ ->
+                                        True
+
+                            _ ->
+                                False
+                      )
                     ]
                 , onInput config.onInput
                 , value config.value
@@ -90,19 +126,25 @@ viewInput config =
                 ]
                 config.otherAttributes
 
-        errorId =
-            config.id ++ "-error"
+        errorOrWarningId =
+            config.id ++ "-errorOrWarning"
 
-        haserror =
-            Maybe.withDefault "" config.error /= ""
+        datalistId =
+            config.id ++ "-datalist"
 
         optinalattributepairs =
             [ ( config.hasPlaceholder
               , placeholder config.label
               )
-            , ( haserror
-              , attribute "aria-describedby" errorId
+            , ( case config.textUnderInput of
+                    NoText ->
+                        False
+
+                    _ ->
+                        True
+              , attribute "aria-describedby" errorOrWarningId
               )
+            , ( config.maybeDatalist /= Nothing, attribute "list" datalistId )
             ]
 
         inputattributes =
@@ -132,39 +174,72 @@ viewInput config =
               )
             , ( "2", input inputattributes [] )
             ]
+
+        getEmptyTextUnderInput className =
+            [ ( textDivKey
+              , div
+                    [ class className
+                    ]
+                    []
+              )
+            ]
+
+        getTextUnderInput t className =
+            [ ( textDivKey
+              , div
+                    [ class className
+                    , id errorOrWarningId
+                    ]
+                    [ text t ]
+              )
+            ]
+
+        textUnderInput =
+            case config.textUnderInput of
+                NoText ->
+                    [ ( textDivKey, div [] [] ) ]
+
+                Error maybeError ->
+                    case maybeError of
+                        Nothing ->
+                            getEmptyTextUnderInput "Input_textUnderInput Input_textUnderInput__error"
+
+                        Just error ->
+                            if config.dirty then
+                                getTextUnderInput error "Input_textUnderInput Input_textUnderInput__error Input_textUnderInput__visible"
+
+                            else
+                                getEmptyTextUnderInput "Input_textUnderInput Input_textUnderInput__error"
+
+                Warning maybeWarning ->
+                    case maybeWarning of
+                        Nothing ->
+                            getEmptyTextUnderInput "Input_textUnderInput Input_textUnderInput__warning"
+
+                        Just error ->
+                            getTextUnderInput error "Input_textUnderInput Input_textUnderInput__warning Input_textUnderInput__visible"
+
+        dataListView =
+            case config.maybeDatalist of
+                Nothing ->
+                    []
+
+                Just list ->
+                    [ ( "4"
+                      , datalist
+                            [ id datalistId ]
+                            (List.map
+                                (\item -> option [ value item ] [])
+                                (List.take 10 list)
+                            )
+                      )
+                    ]
     in
     Keyed.node "div"
         [ class "Input" ]
-        (if config.dirty then
-            case config.error of
-                Nothing ->
-                    List.append inputhtml
-                        [ ( "3"
-                          , div
-                                [ class "Input_error"
-                                ]
-                                []
-                          )
-                        ]
-
-                Just error ->
-                    List.append inputhtml
-                        [ ( "3"
-                          , div
-                                [ class "Input_error Input_error__visible"
-                                , id errorId
-                                ]
-                                [ text error ]
-                          )
-                        ]
-
-         else
-            List.append inputhtml
-                [ ( "3"
-                  , div
-                        [ class "Input_error"
-                        ]
-                        []
-                  )
-                ]
+        (List.concat
+            [ inputhtml
+            , textUnderInput
+            , dataListView
+            ]
         )

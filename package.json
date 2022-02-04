@@ -6,8 +6,11 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "lint": "eslint . --fix && stylelint ./**/*.css --fix && tsc --noEmit",
-    "test": "elm-test"
+    "lint-ts": "eslint src/**/*.ts --fix",
+    "lint-css": "stylelint ./**/*.css --fix",
+    "type-check": "tsc src/**/*.ts --noEmit",
+    "test": "elm-test",
+    "check": "npm run lint-ts && npm run lint-css  && npm run type-check && npm run test"
   },
   "author": "Artsiom Shamsutdzinau <shamsartem@gmail.com>",
   "license": "ISC",

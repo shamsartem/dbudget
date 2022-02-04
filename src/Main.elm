@@ -18,10 +18,8 @@ import Transaction
     exposing
         ( TransactionValueList
         , Transactions(..)
-        , TransactionsDict
         , getTransaction
         , getTransactionValue
-        , transactionsToDecimals
         )
 import Url exposing (Url)
 import UuidSeed exposing (UuidSeed)
@@ -69,12 +67,8 @@ getNewUuid model =
     ( { model | uuidSeed = newUuidSeed }, newUuid )
 
 
-{-| 3.: To get enough bytes of randomness (128 bit), we have to pass at least 4 32-bit ints from JavaScript
-via flags. Here we pass 5, since having a seedExtension of a size that is a power of 2 results
-in slightly faster performance.
--}
-init : Flags -> Url -> Nav.Key -> ( Model, Cmd Msg )
-init { seedAndExtension } url key =
+initialModel : Maybe UuidSeed -> Flags -> Url -> Nav.Key -> ( Model, Cmd Msg )
+initialModel maybeSeed { seedAndExtension } url key =
     let
         model =
             { pageModel = NotFound
@@ -82,7 +76,7 @@ init { seedAndExtension } url key =
             , navKey = key
             , url = url
             , maybeCred = Nothing
-            , uuidSeed = UuidSeed.init seedAndExtension
+            , uuidSeed = Maybe.withDefault (UuidSeed.init seedAndExtension) maybeSeed
             , transactions = Transaction.NotSignedIn
             , invalidTransactions = []
             }
@@ -104,6 +98,15 @@ init { seedAndExtension } url key =
             ( { model | pageModel = SignIn signInModel }
             , Cmd.map GotSignInMsg signInCommand
             )
+
+
+{-| 3.: To get enough bytes of randomness (128 bit), we have to pass at least 4 32-bit ints from JavaScript
+via flags. Here we pass 5, since having a seedExtension of a size that is a power of 2 results
+in slightly faster performance.
+-}
+init : Flags -> Url -> Nav.Key -> ( Model, Cmd Msg )
+init flags url key =
+    initialModel Nothing flags url key
 
 
 getTitle : Model -> String
@@ -223,8 +226,8 @@ changeRouteTo maybeRoute model =
                                 { navKey = model.navKey
                                 , transactionDialog =
                                     TransactionDialog.NewTransaction
-                                        (Transaction.getDefaultTransactionValue newUuid)
-                                , decimalsDict = Transaction.getDecimalsDict model.transactions
+                                        (Transaction.getNewTransactionTemplate model.transactions newUuid)
+                                , transactions = model.transactions
                                 }
 
                         ( transactionListModel, transactionListCmd ) =
@@ -250,7 +253,7 @@ changeRouteTo maybeRoute model =
                                     TransactionDialog.init
                                         { navKey = model.navKey
                                         , transactionDialog = transactionDialog
-                                        , decimalsDict = Transaction.getDecimalsDict model.transactions
+                                        , transactions = model.transactions
                                         }
 
                                 ( transactionListModel, transactionListCmd ) =
@@ -297,6 +300,19 @@ changeRouteTo maybeRoute model =
                 Just Route.CSV ->
                     CSV.init
                         |> updatePageWith CSV GotCSVMsg model
+
+                Just Route.LogOut ->
+                    let
+                        ( m, cmd ) =
+                            initialModel
+                                (Just model.uuidSeed)
+                                -- seed and extension  ( 0, [ 0 ] ) is not actually used because Just above
+                                -- but it is needed to typecheck
+                                { seedAndExtension = ( 0, [ 0 ] ) }
+                                model.url
+                                model.navKey
+                    in
+                    ( m, Cmd.batch [ cmd, Route.pushUrl model.navKey Route.TransactionList ] )
 
 
 type alias SentToElmMsg =
@@ -346,10 +362,10 @@ update message model =
                                             changeRouteTo (Route.fromUrl model.url)
                                                 { model
                                                     | transactions =
-                                                        Loaded
-                                                            { transactionsDict = transactionsDict
-                                                            , decimalsDict = Transaction.transactionsToDecimals transactionsDict
-                                                            }
+                                                        Transaction.updateTransactions
+                                                            model.transactions
+                                                            (Just Loaded)
+                                                            (\_ -> transactionsDict)
                                                     , invalidTransactions = Maybe.withDefault [] (List.tail newInvalidTransactions)
                                                     , uuidSeed = uuidSeed
                                                 }
@@ -364,15 +380,15 @@ update message model =
                                             TransactionDialog.init
                                                 { navKey = model.navKey
                                                 , transactionDialog = TransactionDialog.InvalidTransaction invalidTransaction
-                                                , decimalsDict = Transaction.getDecimalsDict model.transactions
+                                                , transactions = model.transactions
                                                 }
                                     in
                                     ( { model
                                         | transactions =
-                                            Loaded
-                                                { transactionsDict = transactionsDict
-                                                , decimalsDict = Transaction.transactionsToDecimals transactionsDict
-                                                }
+                                            Transaction.updateTransactions
+                                                model.transactions
+                                                (Just Loaded)
+                                                (\_ -> transactionsDict)
                                         , invalidTransactions = Maybe.withDefault [] (List.tail newInvalidTransactions)
                                         , uuidSeed = uuidSeed
                                         , dialogModel = InvalidTransactionDialog transactionDialogModel
@@ -399,7 +415,7 @@ update message model =
             in
             case subMsg of
                 SignIn.SignIn ->
-                    case Cred.credValueToCred signInModel of
+                    case Cred.credValueToCred (SignIn.getCredValue signInModel) of
                         Nothing ->
                             normalUpdate ()
 
@@ -459,16 +475,13 @@ update message model =
                                                         (Prng.Uuid.toString id)
                                                         newTransaction
                                                         transactionsDict
-
-                                                newDecimalsDict =
-                                                    transactionsToDecimals newTransactionsDict
                                             in
                                             ( { model
                                                 | transactions =
-                                                    transactionData
-                                                        { transactionsDict = newTransactionsDict
-                                                        , decimalsDict = newDecimalsDict
-                                                        }
+                                                    Transaction.updateTransactions
+                                                        model.transactions
+                                                        (Just transactionData)
+                                                        (\_ -> newTransactionsDict)
                                               }
                                             , Cmd.batch
                                                 [ Route.pushUrl
@@ -538,21 +551,15 @@ update message model =
                                                         newTransaction
                                                         transactionsDict
 
-                                                transactionsDictModel =
-                                                    Dict.remove idString transactionsDict
-
-                                                newDecimalsDict =
-                                                    transactionsToDecimals transactionsDictModel
-
                                                 { password } =
                                                     Cred.credToCredValue cred
                                             in
                                             ( { model
                                                 | transactions =
-                                                    transactionData
-                                                        { transactionsDict = transactionsDictModel
-                                                        , decimalsDict = newDecimalsDict
-                                                        }
+                                                    Transaction.updateTransactions
+                                                        model.transactions
+                                                        (Just transactionData)
+                                                        (\d -> Dict.remove idString d)
                                               }
                                             , Cmd.batch
                                                 [ Route.pushUrl

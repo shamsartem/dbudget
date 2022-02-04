@@ -50,7 +50,7 @@
     }
   }
 
-  &_error {
+  &_textUnderInput {
     overflow: hidden;
     height: 17px;
     margin-top: 2px;
@@ -58,6 +58,14 @@
     text-overflow: ellipsis;
     visibility: hidden;
     white-space: nowrap;
+
+    &__error {
+      color: var(--c-danger);
+    }
+
+    &__warning {
+      color: var(--c-warning);
+    }
 
     &__visible {
       visibility: visible;

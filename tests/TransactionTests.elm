@@ -1,13 +1,14 @@
 module TransactionTests exposing (..)
 
 import Dict
-import Expect exposing (Expectation)
-import Prng.Uuid exposing (Uuid)
+import Expect
+import Prng.Uuid
 import Test exposing (..)
 import Time
-import Transaction exposing (Transaction)
+import Transaction exposing (TransactionValue)
 
 
+maybeDefaultTransactionValue : Maybe TransactionValue
 maybeDefaultTransactionValue =
     Prng.Uuid.fromString "5d0c4002-5cd4-4859-808d-d5086e4c04c8"
         |> Maybe.map

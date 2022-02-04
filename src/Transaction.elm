@@ -8,19 +8,25 @@ module Transaction exposing
     , TransactionValue
     , TransactionValueList
     , Transactions(..)
+    , TransactionsData
     , TransactionsDict
     , getDecimalsDict
     , getDefaultTransactionValue
     , getFullPrice
     , getIntSum
+    , getNewTransactionTemplate
+    , getNotDeletedTransactionValuesList
     , getPrice
     , getTransaction
     , getTransactionValue
+    , getTransactionsData
     , parseSum
+    , sortByPopularity
     , stmtListToDecimals
+    , stringToIntSum
     , stringToTransactionDict
     , toJsonValue
-    , transactionsToDecimals
+    , updateTransactions
     , validateTransactionValue
     )
 
@@ -32,6 +38,7 @@ import Json.Encode as Encode
 import List
 import Maybe
 import Prng.Uuid exposing (Uuid)
+import Route exposing (Route(..))
 import Time exposing (Posix)
 import UuidSeed exposing (UuidSeed)
 import Validate
@@ -153,20 +160,141 @@ type Transactions
     | Error String
 
 
+getNewTransactionTemplate : Transactions -> Prng.Uuid.Uuid -> TransactionValue
+getNewTransactionTemplate transactions uuid =
+    getNotDeletedTransactionValuesList transactions
+        |> List.sortWith
+            (\a b ->
+                let
+                    aMillis =
+                        Time.posixToMillis a.lastUpdated
+
+                    bMillis =
+                        Time.posixToMillis b.lastUpdated
+                in
+                if aMillis < bMillis then
+                    GT
+
+                else if aMillis > bMillis then
+                    LT
+
+                else
+                    EQ
+            )
+        |> List.head
+        |> Maybe.withDefault (getDefaultTransactionValue uuid)
+        |> (\t -> { t | id = uuid, name = "", description = "", price = "", amount = "" })
+
+
+updateTransactions : Transactions -> Maybe (TransactionsData -> Transactions) -> (TransactionsDict -> TransactionsDict) -> Transactions
+updateTransactions transactions mabeyState modify =
+    let
+        recalc transactionsData =
+            recalculateTransactionsData transactionsData modify
+    in
+    case transactions of
+        Loading transactionsData ->
+            case mabeyState of
+                Just newState ->
+                    newState (recalc transactionsData)
+
+                Nothing ->
+                    Loading (recalc transactionsData)
+
+        Loaded transactionsData ->
+            case mabeyState of
+                Just newState ->
+                    newState (recalc transactionsData)
+
+                Nothing ->
+                    Loaded (recalc transactionsData)
+
+        _ ->
+            transactions
+
+
+getNotDeletedTransactionValuesList : Transactions -> List TransactionValue
+getNotDeletedTransactionValuesList transactions =
+    let
+        { transactionsDict } =
+            getTransactionsData transactions
+    in
+    Dict.values transactionsDict
+        |> List.map (\transaction -> getTransactionValue transaction)
+        |> List.filter
+            (\{ isDeleted } ->
+                not isDeleted
+            )
+
+
+recalculateTransactionsData : TransactionsData -> (TransactionsDict -> TransactionsDict) -> TransactionsData
+recalculateTransactionsData { transactionsDict } modify =
+    let
+        newTransactionsDict =
+            modify transactionsDict
+    in
+    { transactionsDict = newTransactionsDict
+    , decimalsDict = transactionsToDecimals newTransactionsDict
+    }
+
+
+getTransactionsData : Transactions -> TransactionsData
+getTransactionsData transactions =
+    case transactions of
+        Loading transactionsData ->
+            transactionsData
+
+        Loaded transactionsData ->
+            transactionsData
+
+        _ ->
+            { transactionsDict = Dict.empty, decimalsDict = Dict.empty }
+
+
+getTransactionsDataWithDefault : Transactions -> a -> (TransactionsData -> a) -> a
+getTransactionsDataWithDefault transactions default get =
+    case transactions of
+        Loading transactionsData ->
+            get transactionsData
+
+        Loaded transactionsData ->
+            get transactionsData
+
+        _ ->
+            default
+
+
 getDecimalsDict : Transactions -> DecimalsDict
 getDecimalsDict transactions =
-    case transactions of
-        NotSignedIn ->
+    getTransactionsDataWithDefault transactions Dict.empty .decimalsDict
+
+
+sortByPopularity : List String -> List String
+sortByPopularity transactions =
+    transactions
+        |> List.foldl
+            (\key acc ->
+                case Dict.get key acc of
+                    Just val ->
+                        Dict.insert key (val + 1) acc
+
+                    Nothing ->
+                        Dict.insert key 0 acc
+            )
             Dict.empty
+        |> Dict.toList
+        |> List.sortWith
+            (\( _, a ) ( _, b ) ->
+                if a > b then
+                    GT
 
-        Loading { decimalsDict } ->
-            decimalsDict
+                else if a < b then
+                    LT
 
-        Loaded { decimalsDict } ->
-            decimalsDict
-
-        Error _ ->
-            Dict.empty
+                else
+                    EQ
+            )
+        |> List.map (\( key, _ ) -> key)
 
 
 getTransactionValue : Transaction -> TransactionValue
@@ -226,31 +354,35 @@ transactionsToDecimals transactionsDict =
     Dict.foldl
         (\_ transaction decimals ->
             let
-                { price, currency } =
+                { price, currency, isDeleted } =
                     getTransactionValue transaction
             in
-            parseSum price
-                |> Maybe.andThen (\list -> stmtListToDecimals list)
-                |> Maybe.map
-                    (\decimalPartLength ->
-                        Dict.update
-                            currency
-                            (\maybePrevDecimalPartLength ->
-                                let
-                                    prevDecimalPartLength =
-                                        Maybe.withDefault 0 maybePrevDecimalPartLength
-                                in
-                                Just
-                                    (if decimalPartLength > prevDecimalPartLength then
-                                        decimalPartLength
+            if isDeleted then
+                decimals
 
-                                     else
-                                        prevDecimalPartLength
-                                    )
-                            )
-                            decimals
-                    )
-                |> Maybe.withDefault decimals
+            else
+                parseSum price
+                    |> Maybe.andThen (\list -> stmtListToDecimals list)
+                    |> Maybe.map
+                        (\decimalPartLength ->
+                            Dict.update
+                                currency
+                                (\maybePrevDecimalPartLength ->
+                                    let
+                                        prevDecimalPartLength =
+                                            Maybe.withDefault 0 maybePrevDecimalPartLength
+                                    in
+                                    Just
+                                        (if decimalPartLength > prevDecimalPartLength then
+                                            decimalPartLength
+
+                                         else
+                                            prevDecimalPartLength
+                                        )
+                                )
+                                decimals
+                        )
+                    |> Maybe.withDefault decimals
         )
         Dict.empty
         transactionsDict
@@ -386,8 +518,15 @@ parseSum string =
                 (\{ stmtList } -> stmtList)
 
 
+stringToIntSum : String -> Maybe Int -> Int -> Maybe { value : Int, decimals : Int }
+stringToIntSum string maybeLargestKnownDecimalsLength ifEmptyValue =
+    getIntSum (parseSum string) maybeLargestKnownDecimalsLength ifEmptyValue
+
+
 getIntSum : Maybe (List Stmt) -> Maybe Int -> Int -> Maybe { value : Int, decimals : Int }
 getIntSum maybeList maybeLargestKnownDecimalsLength ifEmptyValue =
+    -- TODO: Add max decimal point to prevent overflow
+    -- TODO: Add decimals when using zeros after decimal point
     let
         maybeCurrentDecimalsLength =
             maybeList
@@ -478,15 +617,21 @@ getPrice transactionValue decimals =
         maybeLargestKnownDecimalsLength =
             Dict.get transactionValue.currency decimals
     in
-    getIntSum (parseSum transactionValue.price) maybeLargestKnownDecimalsLength 0
+    stringToIntSum transactionValue.price maybeLargestKnownDecimalsLength 0
         |> Maybe.andThen
             (\price ->
                 let
                     amount =
-                        Maybe.withDefault { decimals = 0, value = 1 } (getIntSum (parseSum transactionValue.amount) Nothing 1)
+                        Maybe.withDefault { decimals = 0, value = 1 } (stringToIntSum transactionValue.amount Nothing 1)
+
+                    amountFloat =
+                        toFloat amount.value / (10.0 ^ toFloat amount.decimals)
 
                     finalPrice =
-                        valueAndDecimalsToFloat { value = price.value * amount.value, decimals = price.decimals + amount.decimals }
+                        valueAndDecimalsToFloat
+                            { value = round (toFloat price.value * amountFloat)
+                            , decimals = price.decimals
+                            }
 
                     finalPriceDecimalsLength =
                         Maybe.withDefault
@@ -530,7 +675,7 @@ ifInvalidSum : (subject -> String) -> error -> error -> Validator error subject
 ifInvalidSum subjectToString error errorLargerThenZero =
     let
         getErrors subject =
-            case getIntSum (parseSum (subjectToString subject)) Nothing 1 of
+            case stringToIntSum (subjectToString subject) Nothing 1 of
                 Nothing ->
                     [ error ]
 

@@ -53,9 +53,3 @@ declare module 'hyperlist' {
     refresh(element: Element, userProvidedConfig: HyperListConfig): void
   }
 }
-
-declare module 'bson' {
-  const serialize: (string: any) => Uint8Array
-  const deserialize: (array: Uint8Array) => any
-  export { serialize, deserialize }
-}
