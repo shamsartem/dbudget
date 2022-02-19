@@ -9,7 +9,8 @@
     "outDir": "dist",
     "module": "commonjs",
     "lib": ["ESNext", "DOM", "WebWorker"],
-    "sourceMap": true
+    "sourceMap": true,
+    "skipLibCheck": true
   },
   "include": ["./src/application"]
 }

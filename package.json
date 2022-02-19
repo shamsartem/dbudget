@@ -5,10 +5,10 @@
   "browser": "index.js",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "npm run check && vite build",
     "lint-ts": "eslint src/**/*.ts --fix",
     "lint-css": "stylelint ./**/*.css --fix",
-    "type-check": "tsc src/**/*.ts --noEmit",
+    "type-check": "tsc --noEmit",
     "test": "elm-test",
     "check": "npm run lint-ts && npm run lint-css && npm run type-check && npm run test"
   },
