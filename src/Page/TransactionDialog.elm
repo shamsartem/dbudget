@@ -8,6 +8,8 @@ import Html exposing (..)
 import Html.Attributes exposing (class, disabled, id, novalidate, type_)
 import Html.Events exposing (onClick, onSubmit)
 import Json.Decode as Decode
+import Numeric.Decimal as Decimal
+import Numeric.Nat as Nat
 import Route
 import Task
 import Time exposing (Posix)
@@ -307,18 +309,19 @@ viewWithTransactionValue transactionValue { transactionView, dirtyRecord, decima
                     Input.Error (Just error)
 
         newDecimals =
-            Transaction.stringToIntSum transactionValue.price Nothing 0
-                |> Maybe.withDefault { value = 0, decimals = 0 }
-                |> (\{ decimals } -> decimals)
+            Transaction.stringToIntSum transactionValue.price Nat.nat0 0
+                |> Result.map (\decimal -> Decimal.getPrecision decimal)
+                |> Result.withDefault Nat.nat0
 
         newDecimalsString =
             newDecimals
+                |> Nat.toInt
                 |> String.fromInt
 
         textsUnderInputs =
             { category =
                 getTextUnderInput Transaction.Category
-                    (List.isEmpty categories)
+                    (not (List.member transactionValue.category categories))
                     ("\""
                         ++ transactionValue.category
                         ++ "\" will be added as a new Category for your "
@@ -332,7 +335,7 @@ viewWithTransactionValue transactionValue { transactionView, dirtyRecord, decima
                     )
             , name =
                 getTextUnderInput Transaction.Name
-                    (List.isEmpty names)
+                    (not (List.member transactionValue.name names))
                     ("\""
                         ++ transactionValue.name
                         ++ "\" will be added to your Category \""
@@ -341,7 +344,7 @@ viewWithTransactionValue transactionValue { transactionView, dirtyRecord, decima
                     )
             , currency =
                 getTextUnderInput Transaction.Currency
-                    (List.isEmpty currencies)
+                    (not (List.member transactionValue.currency currencies))
                     ("\""
                         ++ transactionValue.currency
                         ++ "\" will be added as a new currency with "
@@ -352,8 +355,8 @@ viewWithTransactionValue transactionValue { transactionView, dirtyRecord, decima
             , price =
                 getTextUnderInput Transaction.Price
                     (Dict.get transactionValue.currency decimalsDict
-                        |> Maybe.withDefault 0
-                        |> (\decimalsFromDict -> decimalsFromDict < newDecimals)
+                        |> Maybe.withDefault Nat.nat0
+                        |> (\decimalsFromDict -> Nat.toInt decimalsFromDict < Nat.toInt newDecimals)
                     )
                     ("\""
                         ++ transactionValue.currency
@@ -472,10 +475,10 @@ viewWithTransactionValue transactionValue { transactionView, dirtyRecord, decima
                 }
             , div [ class "Transaction_fullPrice" ]
                 [ case Transaction.getFullPrice transactionValue decimalsDict of
-                    Just fullPrice ->
+                    Ok fullPrice ->
                         text fullPrice
 
-                    Nothing ->
+                    Err _ ->
                         text ""
                 ]
             , buttons

@@ -160,7 +160,7 @@ view model =
                         (TransactionDialog.view transactionDialogModel)
                     ]
 
-                -- TODO handle case when you need to fix invalid transactions
+                -- TODO: Invalid transactions
                 InvalidTransactionDialog transactionDialogModel ->
                     [ Html.map
                         GotTransactionDialogMsg
@@ -653,7 +653,7 @@ subscriptions model =
                 TransactionDialog transactionDialogModel ->
                     Sub.map GotTransactionDialogMsg (TransactionDialog.subscriptions transactionDialogModel)
 
-                -- TODO handle this case
+                -- TODO: Invalid transactions
                 InvalidTransactionDialog transactionDialogModel ->
                     Sub.map GotTransactionDialogMsg (TransactionDialog.subscriptions transactionDialogModel)
     in

@@ -4,7 +4,6 @@ import Browser.Navigation as Nav
 import Dict
 import Html exposing (..)
 import Html.Attributes exposing (attribute, class, classList, id)
-import Maybe exposing (withDefault)
 import Prng.Uuid exposing (Uuid)
 import Result exposing (Result(..))
 import Route exposing (Route(..))
@@ -63,7 +62,7 @@ viewDisplayedTransactions transactionsDict decimalsDict =
                     transactionValue
 
                 fullPrice =
-                    withDefault "" (getFullPrice transactionValue decimalsDict)
+                    Result.withDefault "" (getFullPrice transactionValue decimalsDict)
             in
             transactionItem
                 { isIncome = isIncome

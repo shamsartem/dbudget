@@ -10,7 +10,7 @@
     "lint-css": "stylelint ./**/*.css --fix",
     "type-check": "tsc src/**/*.ts --noEmit",
     "test": "elm-test",
-    "check": "npm run lint-ts && npm run lint-css  && npm run type-check && npm run test"
+    "check": "npm run lint-ts && npm run lint-css && npm run type-check && npm run test"
   },
   "author": "Artsiom Shamsutdzinau <shamsartem@gmail.com>",
   "license": "ISC",

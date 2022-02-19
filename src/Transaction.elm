@@ -1,9 +1,7 @@
 module Transaction exposing
     ( DecimalsDict
     , Field(..)
-    , IntOrFloat(..)
-    , Operator(..)
-    , Stmt
+    , ParseError(..)
     , Transaction
     , TransactionValue
     , TransactionValueList
@@ -13,7 +11,6 @@ module Transaction exposing
     , getDecimalsDict
     , getDefaultTransactionValue
     , getFullPrice
-    , getIntSum
     , getNewTransactionTemplate
     , getNotDeletedTransactionValuesList
     , getPrice
@@ -22,7 +19,6 @@ module Transaction exposing
     , getTransactionsData
     , parseSum
     , sortByPopularity
-    , stmtListToDecimals
     , stringToIntSum
     , stringToTransactionDict
     , toJsonValue
@@ -33,11 +29,16 @@ module Transaction exposing
 import Array exposing (Array)
 import Dict exposing (Dict)
 import Iso8601
-import Json.Decode as Decode
+import Json.Decode as Decode exposing (string)
 import Json.Encode as Encode
 import List
 import Maybe
+import Numeric.ArithmeticError as ArithmeticError exposing (ArithmeticError)
+import Numeric.Decimal as Decimal exposing (Decimal)
+import Numeric.Decimal.Rounding exposing (RoundingAlgorythm(..))
+import Numeric.Nat as Nat exposing (Nat)
 import Prng.Uuid exposing (Uuid)
+import Regex
 import Route exposing (Route(..))
 import Time exposing (Posix)
 import UuidSeed exposing (UuidSeed)
@@ -144,7 +145,7 @@ type alias TransactionsDict =
 
 
 type alias DecimalsDict =
-    Dict String Int
+    Dict String Nat
 
 
 type alias TransactionsData =
@@ -312,43 +313,6 @@ getTransaction transactionValue =
             Nothing
 
 
-floatToDecimalsLength : Float -> Maybe Int
-floatToDecimalsLength number =
-    String.fromFloat number
-        |> String.split "."
-        |> List.drop 1
-        |> List.head
-        |> Maybe.map (\str -> String.length str)
-
-
-stmtListToDecimals : List Stmt -> Maybe Int
-stmtListToDecimals list =
-    List.foldl
-        (\{ intOrFloat } acc ->
-            case intOrFloat of
-                Int _ ->
-                    acc
-
-                Float float ->
-                    floatToDecimalsLength float
-                        |> Maybe.andThen
-                            (\decimalsLength ->
-                                case acc of
-                                    Nothing ->
-                                        Just decimalsLength
-
-                                    Just n ->
-                                        if decimalsLength > n then
-                                            Just decimalsLength
-
-                                        else
-                                            Just n
-                            )
-        )
-        Nothing
-        list
-
-
 transactionsToDecimals : TransactionsDict -> DecimalsDict
 transactionsToDecimals transactionsDict =
     Dict.foldl
@@ -361,28 +325,30 @@ transactionsToDecimals transactionsDict =
                 decimals
 
             else
-                parseSum price
-                    |> Maybe.andThen (\list -> stmtListToDecimals list)
-                    |> Maybe.map
-                        (\decimalPartLength ->
+                stringToIntSum price Nat.nat0 0
+                    |> Result.map
+                        (\decimal ->
                             Dict.update
                                 currency
-                                (\maybePrevDecimalPartLength ->
+                                (\maybePrevPrecision ->
                                     let
-                                        prevDecimalPartLength =
-                                            Maybe.withDefault 0 maybePrevDecimalPartLength
+                                        prevPrecision =
+                                            Maybe.withDefault Nat.nat0 maybePrevPrecision
+
+                                        currentPrecision =
+                                            decimal |> Decimal.getPrecision
                                     in
                                     Just
-                                        (if decimalPartLength > prevDecimalPartLength then
-                                            decimalPartLength
+                                        (if Nat.toInt currentPrecision > Nat.toInt prevPrecision then
+                                            currentPrecision
 
                                          else
-                                            prevDecimalPartLength
+                                            prevPrecision
                                         )
                                 )
                                 decimals
                         )
-                    |> Maybe.withDefault decimals
+                    |> Result.withDefault decimals
         )
         Dict.empty
         transactionsDict
@@ -409,282 +375,222 @@ ifInvalidDate subjectToDate error =
     fromErrors getErrors
 
 
-type IntOrFloat
-    = Int Int
-    | Float Float
+type ParseError
+    = ArithmeticParseError ArithmeticError
+    | NotAllowedSymbolError
+    | InvalidNumberError
+    | SignWithoutANumberError
 
 
-type Operator
-    = Plus
-    | Minus
+allowedSymbols : Regex.Regex
+allowedSymbols =
+    Maybe.withDefault Regex.never <|
+        Regex.fromString "^[0-9+-., ]*$"
 
 
-type alias Stmt =
-    { operator : Operator, intOrFloat : IntOrFloat }
+validNumber : Regex.Regex
+validNumber =
+    Maybe.withDefault Regex.never <|
+        Regex.fromString "^(-|\\+)?(((0|([1-9][0-9]*))[.,][0-9]+)|([1-9][0-9]*))$"
 
 
-parseSum : String -> Maybe (List Stmt)
-parseSum string =
+parseSum : String -> Nat -> Result ParseError (List (Decimal Int Int))
+parseSum string numberOfDecimalsFromDB =
     if string == "" then
-        Just []
+        Ok []
+
+    else if not (Regex.contains allowedSymbols string) then
+        Err NotAllowedSymbolError
 
     else
         let
-            trimmedString =
-                String.trim string
+            stringToNumberOfDecimals s =
+                s
+                    |> String.split "."
+                    |> List.drop 1
+                    |> List.head
+                    |> Maybe.map (\str -> String.length str)
+                    |> Maybe.withDefault 0
 
-            calcLastSum char { previousSign, stmtList, hasDecimalPoint, currentValue } =
-                if currentValue == "" && char /= '+' then
-                    Just { previousSign = char, stmtList = [ { intOrFloat = Int 0, operator = Plus } ], hasDecimalPoint = False, currentValue = "" }
+            numberStrings =
+                string
+                    |> String.replace " " ""
+                    |> String.replace "," "."
+                    |> String.replace "+" " +"
+                    |> String.replace "-" " -"
+                    |> String.trim
+                    |> String.split " "
 
-                else
-                    let
-                        hasNoTrailingDot =
-                            not (String.endsWith "." currentValue)
+            largestNumberOfDecimals =
+                numberStrings
+                    |> List.foldl
+                        (\str acc ->
+                            let
+                                numberOfDecimals =
+                                    stringToNumberOfDecimals str
+                            in
+                            if numberOfDecimals > acc then
+                                numberOfDecimals
 
-                        intDoesNotStartWithZero =
-                            hasDecimalPoint
-                                || not (String.startsWith "0" currentValue)
+                            else
+                                acc
+                        )
+                        0
+                    |> (\n ->
+                            if n > Nat.toInt numberOfDecimalsFromDB then
+                                Nat.fromIntAbs n
 
-                        floatDoesNotStartWithDoubleZero =
-                            not hasDecimalPoint
-                                || not (String.startsWith "00" currentValue)
-
-                        isValid =
-                            hasNoTrailingDot
-                                && intDoesNotStartWithZero
-                                && floatDoesNotStartWithDoubleZero
-                    in
-                    if isValid then
-                        let
-                            maybeIntOrFloat =
-                                if hasDecimalPoint then
-                                    Maybe.map (\n -> Float n) (String.toFloat currentValue)
-
-                                else
-                                    Maybe.map (\n -> Int n) (String.toInt currentValue)
-                        in
-                        Maybe.andThen
-                            (\intOrFloat ->
-                                let
-                                    newStmt =
-                                        { operator =
-                                            if previousSign == '+' then
-                                                Plus
-
-                                            else
-                                                Minus
-                                        , intOrFloat = intOrFloat
-                                        }
-                                in
-                                Just { previousSign = char, stmtList = newStmt :: stmtList, hasDecimalPoint = False, currentValue = "" }
-                            )
-                            maybeIntOrFloat
-
-                    else
-                        Nothing
+                            else
+                                numberOfDecimalsFromDB
+                       )
         in
         List.foldl
-            (\char maybeAcc ->
-                Maybe.andThen
-                    (\acc ->
-                        let
-                            { previousSign, stmtList, hasDecimalPoint, currentValue } =
-                                acc
-                        in
-                        if List.member char [ ',', '.' ] then
-                            if currentValue == "" || hasDecimalPoint then
-                                Nothing
+            (\s acc ->
+                if s == "" || s == "+" || s == "-" then
+                    Err SignWithoutANumberError
 
-                            else
-                                Just { previousSign = previousSign, stmtList = stmtList, hasDecimalPoint = True, currentValue = currentValue ++ "." }
+                else if not (Regex.contains validNumber s) then
+                    Err InvalidNumberError
 
-                        else if List.member char [ '0', '1', '2', '3', '4', '5', '6', '7', '8', '9' ] then
-                            Just { previousSign = previousSign, stmtList = stmtList, hasDecimalPoint = hasDecimalPoint, currentValue = currentValue ++ String.fromChar char }
+                else
+                    acc
+                        |> Result.andThen
+                            (\list ->
+                                let
+                                    decimalOrError =
+                                        Decimal.fromString
+                                            HalfToEven
+                                            largestNumberOfDecimals
+                                            s
+                                in
+                                case decimalOrError of
+                                    Err err ->
+                                        Err (ArithmeticParseError err)
 
-                        else if List.member char [ '-', '+' ] && (currentValue /= "" || stmtList == []) then
-                            calcLastSum char acc
-
-                        else
-                            Nothing
-                    )
-                    maybeAcc
+                                    Ok n ->
+                                        Ok (n :: list)
+                            )
             )
-            (Just { previousSign = '+', stmtList = [], hasDecimalPoint = False, currentValue = "" })
-            (String.toList trimmedString)
-            |> Maybe.andThen
-                (\acc -> calcLastSum '+' acc)
-            |> Maybe.map
-                (\{ stmtList } -> stmtList)
+            (Ok [])
+            numberStrings
 
 
-stringToIntSum : String -> Maybe Int -> Int -> Maybe { value : Int, decimals : Int }
-stringToIntSum string maybeLargestKnownDecimalsLength ifEmptyValue =
-    getIntSum (parseSum string) maybeLargestKnownDecimalsLength ifEmptyValue
-
-
-getIntSum : Maybe (List Stmt) -> Maybe Int -> Int -> Maybe { value : Int, decimals : Int }
-getIntSum maybeList maybeLargestKnownDecimalsLength ifEmptyValue =
-    -- TODO: Add max decimal point to prevent overflow
-    -- TODO: Add decimals when using zeros after decimal point
-    let
-        maybeCurrentDecimalsLength =
-            maybeList
-                |> Maybe.andThen (\list -> stmtListToDecimals list)
-
-        maybeLargestDecimalsLength =
-            case maybeCurrentDecimalsLength of
-                Nothing ->
-                    maybeLargestKnownDecimalsLength
-
-                Just currentDecimalsLength ->
-                    case maybeLargestKnownDecimalsLength of
-                        Nothing ->
-                            Just currentDecimalsLength
-
-                        Just largestKnownDecimalsLength ->
-                            if currentDecimalsLength > largestKnownDecimalsLength then
-                                Just currentDecimalsLength
-
-                            else
-                                Just largestKnownDecimalsLength
-    in
-    Maybe.andThen
+stringToIntSum : String -> Nat -> Int -> Result ParseError (Decimal Int Int)
+stringToIntSum string numberOfDecimalsFromDB ifEmptyValue =
+    Result.andThen
         (\list ->
             let
-                decimals =
-                    Maybe.withDefault 0 maybeLargestDecimalsLength
-
-                multiplier =
-                    10 ^ decimals
-
-                floatToInt : Float -> Int
-                floatToInt float =
-                    float
-                        * toFloat multiplier
-                        |> truncate
+                maybeFirstElement =
+                    list |> List.head
             in
-            Just
-                { decimals = decimals
-                , value =
+            case maybeFirstElement of
+                Nothing ->
+                    Ok (Decimal.succeed RoundDown Nat.nat0 ifEmptyValue)
+
+                Just firstElement ->
+                    let
+                        precision =
+                            Decimal.getPrecision firstElement
+                    in
                     List.foldl
-                        (\{ operator, intOrFloat } acc ->
-                            case operator of
-                                Plus ->
-                                    case intOrFloat of
-                                        Int int ->
-                                            acc + int * multiplier
-
-                                        Float float ->
-                                            acc + floatToInt float
-
-                                Minus ->
-                                    case intOrFloat of
-                                        Int int ->
-                                            acc - int * multiplier
-
-                                        Float float ->
-                                            acc - floatToInt float
+                        (\decimal acc ->
+                            acc
+                                |> Result.andThen
+                                    (\sum ->
+                                        sum
+                                            |> Decimal.addBounded decimal
+                                            |> Result.mapError
+                                                (\err -> ArithmeticParseError err)
+                                    )
                         )
-                        (if list == [] then
-                            ifEmptyValue
-
-                         else
-                            0
-                        )
+                        (Ok (Decimal.succeed RoundDown precision 0))
                         list
-                }
         )
-        maybeList
+        (parseSum string numberOfDecimalsFromDB)
 
 
-valueAndDecimalsToFloat : { value : Int, decimals : Int } -> Float
-valueAndDecimalsToFloat { value, decimals } =
-    toFloat value / toFloat (10 ^ decimals)
-
-
-
--- getSum : Maybe (List Stmt) -> Maybe Int -> Int -> Maybe Float
--- getSum maybeList maybeLargestKnownDecimalsLength ifEmptyValue =
---     Maybe.andThen
---         (\valueAndDecimals -> Just (valueAndDecimalsToFloat valueAndDecimals))
---         (getIntSum maybeList maybeLargestKnownDecimalsLength ifEmptyValue)
-
-
-getPrice : TransactionValue -> DecimalsDict -> Maybe String
+getPrice : TransactionValue -> DecimalsDict -> Result ParseError (Decimal Int Int)
 getPrice transactionValue decimals =
     let
-        maybeLargestKnownDecimalsLength =
+        largestKnownDecimalsLength =
             Dict.get transactionValue.currency decimals
+                |> Maybe.withDefault Nat.nat0
     in
-    stringToIntSum transactionValue.price maybeLargestKnownDecimalsLength 0
-        |> Maybe.andThen
+    stringToIntSum transactionValue.price largestKnownDecimalsLength 0
+        |> Result.andThen
             (\price ->
                 let
-                    amount =
-                        Maybe.withDefault { decimals = 0, value = 1 } (stringToIntSum transactionValue.amount Nothing 1)
+                    currentDecimalsLength =
+                        Decimal.getPrecision price
 
-                    amountFloat =
-                        toFloat amount.value / (10.0 ^ toFloat amount.decimals)
-
-                    finalPrice =
-                        valueAndDecimalsToFloat
-                            { value = round (toFloat price.value * amountFloat)
-                            , decimals = price.decimals
-                            }
-
-                    finalPriceDecimalsLength =
-                        Maybe.withDefault
-                            0
-                            (floatToDecimalsLength finalPrice)
-
-                    largestKnownDecimalsLength =
-                        Maybe.withDefault 0 maybeLargestKnownDecimalsLength
-
-                    leftoverZeroes =
-                        if finalPriceDecimalsLength < price.decimals then
-                            String.repeat (price.decimals - finalPriceDecimalsLength) "0"
-
-                        else if finalPriceDecimalsLength < largestKnownDecimalsLength then
-                            String.repeat (largestKnownDecimalsLength - finalPriceDecimalsLength) "0"
+                    largestDecimalsLength =
+                        if Nat.toInt currentDecimalsLength > Nat.toInt largestKnownDecimalsLength then
+                            currentDecimalsLength
 
                         else
-                            ""
-
-                    separator =
-                        if finalPriceDecimalsLength == 0 && leftoverZeroes /= "" then
-                            "."
-
-                        else
-                            ""
+                            largestKnownDecimalsLength
                 in
-                Just (String.fromFloat finalPrice ++ separator ++ leftoverZeroes)
+                Result.andThen
+                    (\amount ->
+                        Decimal.multiplyBounded
+                            price
+                            amount
+                            |> Result.mapError (\err -> ArithmeticParseError err)
+                            |> Result.andThen
+                                (\finalPrice -> Ok finalPrice)
+                    )
+                    (stringToIntSum transactionValue.amount largestDecimalsLength 1)
             )
 
 
-getFullPrice : TransactionValue -> DecimalsDict -> Maybe String
+getFullPrice : TransactionValue -> DecimalsDict -> Result ParseError String
 getFullPrice transactionValue decimals =
-    Maybe.map
+    Result.map
         (\price ->
-            price ++ " " ++ transactionValue.currency
+            Decimal.toString price ++ " " ++ transactionValue.currency
         )
         (getPrice transactionValue decimals)
 
 
-ifInvalidSum : (subject -> String) -> error -> error -> Validator error subject
-ifInvalidSum subjectToString error errorLargerThenZero =
+ifInvalidSum : (subject -> String) -> ( Field, String ) -> Validator ( Field, String ) subject
+ifInvalidSum subjectToString ( field, fieldName ) =
     let
         getErrors subject =
-            case stringToIntSum (subjectToString subject) Nothing 1 of
-                Nothing ->
-                    [ error ]
+            case stringToIntSum (subjectToString subject) Nat.nat0 1 of
+                Err err ->
+                    [ ( field
+                      , case err of
+                            InvalidNumberError ->
+                                "One of the numbers is invalid in the " ++ fieldName ++ " field"
 
-                Just { value } ->
-                    if value > 0 then
+                            SignWithoutANumberError ->
+                                "There is + or - sign without corresponding number in the " ++ fieldName ++ " field"
+
+                            NotAllowedSymbolError ->
+                                "Only numbers, \"+\" and \"-\" signs can be used for " ++ fieldName ++ " field"
+
+                            ArithmeticParseError e ->
+                                case e of
+                                    ArithmeticError.Overflow ->
+                                        "Number is too large or has too much decimal points in the " ++ fieldName ++ " field"
+
+                                    ArithmeticError.Underflow ->
+                                        "Number is too large or has too much decimal points in the " ++ fieldName ++ " field"
+
+                                    ArithmeticError.DivisionByZero ->
+                                        "Number has division by zero in the " ++ fieldName ++ " field"
+
+                                    ArithmeticError.ParsingProblem problem ->
+                                        "Some number ( " ++ problem ++ " ) is invalid in the " ++ fieldName ++ " field"
+                      )
+                    ]
+
+                Ok value ->
+                    if Decimal.toFloat value > 0 then
                         []
 
                     else
-                        [ errorLargerThenZero ]
+                        [ ( field, fieldName ++ " must be positive" ) ]
     in
     fromErrors getErrors
 
@@ -700,13 +606,9 @@ transactionValidator =
         , ifBlank .name ( Name, "Name is missing" )
         , Validate.firstError
             [ ifBlank .price ( Price, "Price is missing" )
-            , ifInvalidSum .price
-                ( Price, "Only numbers, \"+\" and \"-\" signs can be used for Price field" )
-                ( Price, "Price must be positive" )
+            , ifInvalidSum .price ( Price, "Price" )
             ]
-        , ifInvalidSum .amount
-            ( Amount, "Only numbers, \"+\" and \"-\" signs can be used for Amount field" )
-            ( Amount, "Amount must be positive" )
+        , ifInvalidSum .amount ( Amount, "Amount" )
         , ifBlank .currency ( Currency, "Currency is missing" )
         ]
 
