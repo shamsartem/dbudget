@@ -21,7 +21,7 @@ view _ =
         , div
             [ class "CSV_stubText"
             ]
-            [ text "CSV export and import comming soon...or never" ]
+            [ text "CSV export and import comming soon..." ]
         ]
 
 

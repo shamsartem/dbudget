@@ -3,10 +3,12 @@ module Page.TransactionList exposing (..)
 import Browser.Navigation as Nav
 import Dict
 import Html exposing (..)
-import Html.Attributes exposing (attribute, class, classList, id)
+import Html.Attributes exposing (attribute, class, classList, id, style)
+import InfiniteList as IL
 import Prng.Uuid exposing (Uuid)
 import Result exposing (Result(..))
 import Route exposing (Route(..))
+import Time
 import Transaction
     exposing
         ( DecimalsDict
@@ -27,12 +29,19 @@ type alias DisplayedTransaction =
     , isIncome : Bool
     , name : String
     , price : String
+    , lastUpdated : Int
     }
 
 
 type alias Model =
     { search : String
+    , infList : IL.Model
     }
+
+
+type ListItem
+    = Header String
+    | Row DisplayedTransaction
 
 
 type alias MainModel =
@@ -50,34 +59,110 @@ c elementAndOrModifier =
     class (cl elementAndOrModifier)
 
 
-viewDisplayedTransactions : TransactionsDict -> DecimalsDict -> List (Html Msg)
-viewDisplayedTransactions transactionsDict decimalsDict =
-    List.map
-        (\transaction ->
-            let
-                transactionValue =
-                    getTransactionValue transaction
+transactionsToDisplayedTransactions : Transactions -> List DisplayedTransaction
+transactionsToDisplayedTransactions transactions =
+    let
+        { transactionsDict, decimalsDict } =
+            case transactions of
+                Loaded loaded ->
+                    loaded
 
-                { isIncome, date, category, name, id } =
-                    transactionValue
+                _ ->
+                    { transactionsDict = Dict.empty, decimalsDict = Dict.empty }
+    in
+    transactionsDict
+        |> Dict.values
+        |> List.map
+            (\transaction ->
+                let
+                    transactionValue =
+                        getTransactionValue transaction
 
-                fullPrice =
-                    Result.withDefault "" (getFullPrice transactionValue decimalsDict)
-            in
-            transactionItem
+                    { isIncome, date, category, name, id, lastUpdated } =
+                        transactionValue
+
+                    fullPrice =
+                        Result.withDefault "" (getFullPrice transactionValue decimalsDict)
+                in
                 { isIncome = isIncome
                 , price = fullPrice
                 , date = date
                 , category = category
                 , name = name
                 , id = id
+                , lastUpdated = Time.posixToMillis lastUpdated
                 }
-        )
-        (List.map (\( _, v ) -> v) (Dict.toList transactionsDict))
+            )
 
 
-viewTransactions : Transactions -> Html Msg
-viewTransactions transactions =
+filterDisplayedTransactions : String -> List DisplayedTransaction -> List DisplayedTransaction
+filterDisplayedTransactions search displayedTransactions =
+    let
+        searchLower =
+            String.toLower search
+    in
+    if searchLower == "" then
+        displayedTransactions
+
+    else
+        displayedTransactions
+            |> List.filter
+                (\{ date, category, name } ->
+                    [ date, category, name ]
+                        |> List.any
+                            (\text ->
+                                text
+                                    |> String.toLower
+                                    |> String.contains searchLower
+                            )
+                )
+
+
+sortTransactions : List DisplayedTransaction -> List DisplayedTransaction
+sortTransactions list =
+    list
+        |> List.sortWith
+            (\a b ->
+                if a.date > b.date then
+                    LT
+
+                else if a.date < b.date then
+                    GT
+
+                else if a.lastUpdated > b.lastUpdated then
+                    LT
+
+                else if a.lastUpdated < b.lastUpdated then
+                    GT
+
+                else
+                    EQ
+            )
+
+
+itemHeight : Int
+itemHeight =
+    70
+
+
+containerHeight : Int
+containerHeight =
+    2160
+
+
+config : IL.Config ListItem Msg
+config =
+    IL.config
+        { itemView = itemView
+        , itemHeight = IL.withConstantHeight itemHeight
+        , containerHeight = containerHeight
+        }
+        |> IL.withOffset 300
+        |> IL.withKeepFirst 1
+
+
+getMessageView : Transactions -> List DisplayedTransaction -> List DisplayedTransaction -> Html Msg
+getMessageView transactions availableTransactionsToDisplay sortedTransactions =
     let
         getMessage msg =
             div [ c "statusMessage" ] [ text msg ]
@@ -90,24 +175,59 @@ viewTransactions transactions =
             getMessage "Loading..."
 
         Loaded { transactionsDict, decimalsDict } ->
-            let
-                displ =
-                    viewDisplayedTransactions transactionsDict decimalsDict
-            in
-            case displ of
+            case availableTransactionsToDisplay of
                 [] ->
                     getMessage "You currently have no transactions. Add them by using \"+\" button in the bottom right corner of the screen"
 
                 _ ->
-                    div [ c "list" ] displ
+                    case sortedTransactions of
+                        [] ->
+                            getMessage "No search results"
+
+                        _ ->
+                            text ""
 
         Error errorText ->
             getMessage errorText
 
 
+viewTransactions : Transactions -> Model -> List (Html Msg)
+viewTransactions transactions model =
+    let
+        availableTransactionsToDisplay =
+            case transactions of
+                Loaded { transactionsDict, decimalsDict } ->
+                    transactions
+                        |> transactionsToDisplayedTransactions
+
+                _ ->
+                    []
+
+        sortedTransactions =
+            availableTransactionsToDisplay
+                |> filterDisplayedTransactions model.search
+                |> sortTransactions
+    in
+    [ div
+        [ c "infList", IL.onScroll InfListMsg ]
+        [ IL.view
+            config
+            model.infList
+            (Header model.search
+                :: (sortedTransactions
+                        |> List.map Row
+                   )
+            )
+        ]
+    , getMessageView transactions availableTransactionsToDisplay sortedTransactions
+    ]
+
+
 init : MainModel -> ( Model, Cmd Msg )
 init _ =
-    ( { search = "" }
+    ( { search = ""
+      , infList = IL.init
+      }
     , Cmd.none
     )
 
@@ -116,10 +236,35 @@ init _ =
 -- VIEW
 
 
-transactionItem : DisplayedTransaction -> Html Msg
-transactionItem { date, category, name, price, id, isIncome } =
+headerView : String -> Html Msg
+headerView search =
+    div [ c "header" ]
+        [ viewHeader Header.TransactionList
+        , form [ c "searchContainer" ]
+            [ div [ c "search" ]
+                [ Input.view
+                    { label = "search"
+                    , onInput = SearchInput
+                    , onBlur = Nothing
+                    , value = search
+                    , required = False
+                    , id = "login"
+                    , hasPlaceholder = True
+                    , otherAttributes = []
+                    , textUnderInput = Input.NoText
+                    , dirty = False
+                    , maybeDatalist = Nothing
+                    }
+                ]
+            ]
+        ]
+
+
+transactionItemView : DisplayedTransaction -> Html Msg
+transactionItemView { date, category, name, price, id, isIncome } =
     div
         [ c "item"
+        , style "height" (String.fromInt itemHeight ++ "px")
         , classList [ ( cl "item__isIncome", isIncome ) ]
         ]
         [ div [ c "itemSection" ]
@@ -138,37 +283,32 @@ transactionItem { date, category, name, price, id, isIncome } =
         ]
 
 
+itemView : Int -> Int -> ListItem -> Html Msg
+itemView _ _ item =
+    case item of
+        Header search ->
+            headerView search
+
+        Row displayedTransaction ->
+            transactionItemView displayedTransaction
+
+
 view : Transactions -> Model -> Html Msg
 view transactions model =
     div [ class "TransactionsList page" ]
-        [ viewHeader Header.TransactionList
-        , form [ c "searchContainer" ]
-            [ div [ c "search" ]
-                [ Input.view
-                    { label = "search"
-                    , onInput = SearchInput
-                    , onBlur = Nothing
-                    , value = model.search
-                    , required = False
-                    , id = "login"
-                    , hasPlaceholder = True
-                    , otherAttributes = []
-                    , textUnderInput = Input.NoText
-                    , dirty = False
-                    , maybeDatalist = Nothing
-                    }
-                ]
+        (List.concat
+            [ viewTransactions transactions model
+            , [ a
+                    [ class "roundButton"
+                    , Route.href Route.TransactionNew
+                    , id Header.newtransactionid
+                    ]
+                    [ span [ attribute "aria-hidden" "true" ] [ text "+" ]
+                    , span [ class "visuallyHidden" ] [ text "Add Transaction" ]
+                    ]
+              ]
             ]
-        , viewTransactions transactions
-        , a
-            [ class "roundButton"
-            , Route.href Route.TransactionNew
-            , id Header.newtransactionid
-            ]
-            [ span [ attribute "aria-hidden" "true" ] [ text "+" ]
-            , span [ class "visuallyHidden" ] [ text "Add Transaction" ]
-            ]
-        ]
+        )
 
 
 
@@ -177,6 +317,7 @@ view transactions model =
 
 type Msg
     = SearchInput String
+    | InfListMsg IL.Model
 
 
 update : MainModel -> Msg -> Model -> ( Model, Cmd Msg )
@@ -184,6 +325,9 @@ update _ msg model =
     case msg of
         SearchInput str ->
             ( { model | search = str }, Cmd.none )
+
+        InfListMsg infList ->
+            ( { model | infList = infList }, Cmd.none )
 
 
 subscriptions : Model -> Sub Msg

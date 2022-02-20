@@ -287,10 +287,10 @@ sortByPopularity transactions =
         |> List.sortWith
             (\( _, a ) ( _, b ) ->
                 if a > b then
-                    GT
+                    LT
 
                 else if a < b then
-                    LT
+                    GT
 
                 else
                     EQ

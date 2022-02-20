@@ -2,20 +2,39 @@
   display: flex;
   align-items: center;
 
-  &_searchContainer {
+  &_header {
+    position: sticky;
+    z-index: 1;
+    top: 0;
+    display: flex;
     width: 100%;
     min-width: var(--min-page-width);
     max-width: var(--max-page-width);
+    flex-direction: column;
+    margin: 0 auto;
+    background-color: var(--c-gray-1);
+  }
+
+  &_searchContainer {
+    width: 100%;
     padding: var(--space-md);
     border-bottom: 1px solid var(--c-gray-4);
-    background-color: var(--c-gray-1);
   }
 
   &_search {
     width: 100%;
   }
 
+  &_infList {
+    overflow: auto;
+    width: 100%;
+    height: 100vh;
+  }
+
   &_statusMessage {
+    position: absolute;
+    top: 50%;
+    left: 50%;
     display: flex;
     min-width: var(--min-page-width);
     max-width: var(--max-page-width);
@@ -24,15 +43,7 @@
     justify-content: center;
     padding: var(--space-lg);
     text-align: center;
-  }
-
-  &_list {
-    display: flex;
-    width: 100%;
-    min-width: var(--min-page-width);
-    max-width: var(--max-page-width);
-    flex-direction: column;
-    flex-grow: 1;
+    transform: translate(-50%, -50%);
   }
 
   &_item {
@@ -41,12 +52,12 @@
     width: 100%;
     min-width: var(--min-page-width);
     max-width: var(--max-page-width);
-    height: 70px;
     flex-direction: column;
     align-items: center;
     justify-content: space-between;
     padding: var(--space-md);
     border-bottom: 1px solid var(--c-gray-4);
+    margin: 0 auto;
 
     &__isIncome {
       background-color: var(--c-gray-2);
