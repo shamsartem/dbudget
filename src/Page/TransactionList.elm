@@ -11,10 +11,8 @@ import Route exposing (Route(..))
 import Time
 import Transaction
     exposing
-        ( DecimalsDict
-        , Field(..)
+        ( Field(..)
         , Transactions(..)
-        , TransactionsDict
         , getFullPrice
         , getTransactionValue
         )
@@ -174,7 +172,7 @@ getMessageView transactions availableTransactionsToDisplay sortedTransactions =
         Loading _ ->
             getMessage "Loading..."
 
-        Loaded { transactionsDict, decimalsDict } ->
+        Loaded _ ->
             case availableTransactionsToDisplay of
                 [] ->
                     getMessage "You currently have no transactions. Add them by using \"+\" button in the bottom right corner of the screen"
@@ -196,7 +194,7 @@ viewTransactions transactions model =
     let
         availableTransactionsToDisplay =
             case transactions of
-                Loaded { transactionsDict, decimalsDict } ->
+                Loaded _ ->
                     transactions
                         |> transactionsToDisplayedTransactions
 

@@ -17,7 +17,7 @@
   --l-gray-8: 80%;
   --l-gray-9: 90%;
   --c-gray-1: hsl(var(--h-gray), var(--s-gray), var(--l-gray-1));
-  --c-gray-1-7: hsl(var(--h-gray), var(--s-gray), var(--l-gray-1), 70%);
+  --c-gray-1-8: hsl(var(--h-gray), var(--s-gray), var(--l-gray-1), 80%);
   --c-gray-2: hsl(var(--h-gray), var(--s-gray), var(--l-gray-2));
   --c-gray-3: hsl(var(--h-gray), var(--s-gray), var(--l-gray-3));
   --c-gray-4: hsl(var(--h-gray), var(--s-gray), var(--l-gray-4));

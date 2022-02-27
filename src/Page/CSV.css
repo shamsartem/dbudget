@@ -3,8 +3,19 @@
   flex-grow: 1;
   align-items: center;
 
-  &_stubText {
-    margin-top: 30px;
-    text-align: center;
+  &_container {
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1;
+    align-items: center;
+    justify-content: center;
+  }
+
+  &_error {
+    white-space: pre;
+  }
+
+  &_exportButton {
+    margin-top: 20px;
   }
 }

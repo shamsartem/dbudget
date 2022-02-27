@@ -3,7 +3,9 @@ module Main exposing (Model, PageModel, main)
 import Browser exposing (Document)
 import Browser.Navigation as Nav
 import Cred exposing (Cred)
+import Csv.Encode
 import Dict
+import File.Download
 import Html exposing (..)
 import Json.Decode as Decode
 import Page.CSV as CSV
@@ -408,41 +410,107 @@ update message model =
 
         ( GotSignInMsg subMsg, SignIn signInModel, _ ) ->
             let
-                normalUpdate =
-                    \_ ->
-                        SignIn.update subMsg signInModel
-                            |> updatePageWith SignIn GotSignInMsg model
+                maybeCred =
+                    signInModel
+                        |> SignIn.getCredValue
+                        |> Cred.credValueToCred
             in
-            case subMsg of
-                SignIn.SignIn ->
-                    case Cred.credValueToCred (SignIn.getCredValue signInModel) of
-                        Nothing ->
-                            normalUpdate ()
-
-                        Just cred ->
-                            let
-                                ( m, cmd ) =
-                                    changeRouteTo (Route.fromUrl model.url)
-                                        { model | maybeCred = Just cred, transactions = Loading { transactionsDict = Dict.empty, decimalsDict = Dict.empty } }
-                            in
-                            -- let users use the app even while we decrypt the data - here we init empty dicts
-                            ( m
-                            , Cmd.batch
-                                [ cmd
-                                , Port.handleSignIn (Cred.toJsonString cred)
-                                ]
-                            )
+            case ( subMsg, maybeCred ) of
+                ( SignIn.SignIn, Just cred ) ->
+                    let
+                        ( m, cmd ) =
+                            changeRouteTo (Route.fromUrl model.url)
+                                { model | maybeCred = Just cred, transactions = Loading { transactionsDict = Dict.empty, decimalsDict = Dict.empty } }
+                    in
+                    -- let users use the app even while we decrypt the data - here we init empty dicts
+                    ( m
+                    , Cmd.batch
+                        [ cmd
+                        , Port.handleSignIn (Cred.toJsonString cred)
+                        ]
+                    )
 
                 _ ->
-                    normalUpdate ()
+                    SignIn.update subMsg signInModel
+                        |> updatePageWith SignIn GotSignInMsg model
 
         ( GotTransactionListMsg subMsg, TransactionList transactionListModel, _ ) ->
             TransactionList.update { navKey = model.navKey } subMsg transactionListModel
                 |> updatePageWith TransactionList GotTransactionListMsg model
 
         ( GotCSVMsg subMsg, CSV csvModel, _ ) ->
-            CSV.update subMsg csvModel
-                |> updatePageWith CSV GotCSVMsg model
+            case ( subMsg, csvModel.csv, model.maybeCred ) of
+                ( CSV.CsvParsed _, CSV.ParsedCsv records, Just cred ) ->
+                    let
+                        ( transactionsDict, transactionsValueList, uuidSeed ) =
+                            Transaction.listOfRowsToTransactionsDict model.uuidSeed records
+
+                        newTransactions =
+                            Transaction.mergeTransactions
+                                model.transactions
+                                transactionsDict
+
+                        transactionData =
+                            Transaction.getTransactionsData newTransactions
+
+                        { password } =
+                            Cred.credToCredValue cred
+                    in
+                    ( { model
+                        | transactions = newTransactions
+                        , uuidSeed = uuidSeed
+                        , invalidTransactions = transactionsValueList
+                      }
+                    , Port.updatedTransactions
+                        (Transaction.toJsonValue
+                            transactionData.transactionsDict
+                        )
+                        password
+                    )
+
+                ( CSV.CsvExport, _, Just _ ) ->
+                    let
+                        loadingAndLoaded { transactionsDict } =
+                            let
+                                csvString =
+                                    transactionsDict
+                                        |> Transaction.toListOfListsOfStrings
+                                        |> (\list ->
+                                                { headers =
+                                                    [ "Is Income"
+                                                    , "Date"
+                                                    , "Category"
+                                                    , "Name"
+                                                    , "Price"
+                                                    , "Amount"
+                                                    , "Description"
+                                                    , "Currency"
+                                                    , "Id"
+                                                    , "LastUpdate"
+                                                    , "IsDeleted"
+                                                    ]
+                                                , records = list
+                                                }
+                                           )
+                                        |> Csv.Encode.toString
+                            in
+                            ( model
+                            , File.Download.string "transactions.csv" "text/csv" csvString
+                            )
+                    in
+                    case model.transactions of
+                        Loading transactionDict ->
+                            loadingAndLoaded transactionDict
+
+                        Loaded transactionDict ->
+                            loadingAndLoaded transactionDict
+
+                        _ ->
+                            ( model, Cmd.none )
+
+                _ ->
+                    CSV.update subMsg csvModel
+                        |> updatePageWith CSV GotCSVMsg model
 
         ( GotTransactionDialogMsg subMsg, _, TransactionDialog transactionDialogModel ) ->
             let

@@ -173,29 +173,19 @@ view model =
             viewWithTransactionValue transactionValue model
 
         LoadingTransactions ->
-            loadingView
+            messageView "You will be able to edit transaction after loading is finished"
 
         NoTransactionWithThisId ->
-            noTransactionWithThisIdView
+            messageView "There is no transaction with this id"
 
 
-loadingView : Html Msg
-loadingView =
+messageView : String -> Html Msg
+messageView message =
     div [ class "Transaction fullSize", id dialogId ]
         [ button [ class "Transaction_closeButton", id closeButtonId, onClick ClosedDialog ]
             [ span [ class "visuallyHidden" ] [ text "Close" ]
             ]
-        , text "You will be able to edit transaction after loading is finished"
-        ]
-
-
-noTransactionWithThisIdView : Html Msg
-noTransactionWithThisIdView =
-    div [ class "Transaction fullSize", id dialogId ]
-        [ button [ class "Transaction_closeButton", id closeButtonId, onClick ClosedDialog ]
-            [ span [ class "visuallyHidden" ] [ text "Close" ]
-            ]
-        , text "There is no transaction with this id"
+        , div [ class "Transaction_message" ] [ text message ]
         ]
 
 

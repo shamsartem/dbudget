@@ -38,7 +38,6 @@
     "last 2 FirefoxAndroid major versions",
     "last 2 Safari major versions",
     "last 2 ios_saf major versions",
-    "last 2 Opera major versions",
     "last 2 Samsung major versions"
   ],
   "dependencies": {
