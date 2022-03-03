@@ -5,9 +5,16 @@
   align-items: center;
   justify-content: center;
   background-color: var(--c-gray-1-8);
+  overflow-y: scroll;
+
+  &_title {
+    margin-bottom: 9px;
+    font-weight: var(--fw-bold);
+  }
 
   &_message {
     padding: 20px;
+    font-weight: var(--fw-bold);
     text-align: center;
   }
 

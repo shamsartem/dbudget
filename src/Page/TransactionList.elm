@@ -1,21 +1,27 @@
-module Page.TransactionList exposing (..)
+module Page.TransactionList exposing
+    ( DialogModel
+    , InitType(..)
+    , Model
+    , Msg
+    , getStore
+    , getTitle
+    , init
+    , update
+    , view
+    )
 
-import Browser.Navigation as Nav
-import Dict
+import Dialog.TransactionDialog as TransactionDialog
 import Html exposing (..)
 import Html.Attributes exposing (attribute, class, classList, id, style)
-import InfiniteList as IL
+import InfiniteList
 import Prng.Uuid exposing (Uuid)
 import Result exposing (Result(..))
 import Route exposing (Route(..))
+import Store exposing (Store)
 import Time
-import Transaction
-    exposing
-        ( Field(..)
-        , Transactions(..)
-        , getFullPrice
-        , getTransactionValue
-        )
+import Transaction.Field exposing (Field(..))
+import Transaction.Transactions as Transactions exposing (Transactions)
+import Transaction.Utils as TransactionUtils
 import View.Header as Header exposing (viewHeader)
 import View.Input as Input
 
@@ -31,20 +37,46 @@ type alias DisplayedTransaction =
     }
 
 
+type DialogModel
+    = DialogModel TransactionDialog.Model
+    | WithoutDialog Store.SignedInStore
+
+
 type alias Model =
-    { search : String
-    , infList : IL.Model
+    { dialogModel : DialogModel
+    , search : String
+    , infList : InfiniteList.Model
     }
+
+
+getTitle : Model -> String
+getTitle { dialogModel } =
+    case dialogModel of
+        DialogModel transactionDialogModel ->
+            TransactionDialog.getTitle transactionDialogModel
+
+        WithoutDialog _ ->
+            "Transactions"
+
+
+getSignedInStore : Model -> Store.SignedInStore
+getSignedInStore { dialogModel } =
+    case dialogModel of
+        WithoutDialog sigedInStore ->
+            sigedInStore
+
+        DialogModel m ->
+            TransactionDialog.getSignedInStore m
+
+
+getStore : Model -> Store
+getStore model =
+    getSignedInStore model |> Store.signedInStoreToStore
 
 
 type ListItem
     = Header String
     | Row DisplayedTransaction
-
-
-type alias MainModel =
-    { navKey : Nav.Key
-    }
 
 
 cl : String -> String
@@ -60,27 +92,21 @@ c elementAndOrModifier =
 transactionsToDisplayedTransactions : Transactions -> List DisplayedTransaction
 transactionsToDisplayedTransactions transactions =
     let
-        { transactionsDict, decimalsDict } =
-            case transactions of
-                Loaded loaded ->
-                    loaded
+        notDeletedTransactionDataList =
+            Transactions.getNotDeletedTransactionDataList transactions
 
-                _ ->
-                    { transactionsDict = Dict.empty, decimalsDict = Dict.empty }
+        decimalsDict =
+            Transactions.getDecimalsDict transactions
     in
-    transactionsDict
-        |> Dict.values
+    notDeletedTransactionDataList
         |> List.map
-            (\transaction ->
+            (\transactionData ->
                 let
-                    transactionValue =
-                        getTransactionValue transaction
-
                     { isIncome, date, category, name, id, lastUpdated } =
-                        transactionValue
+                        transactionData
 
                     fullPrice =
-                        Result.withDefault "" (getFullPrice transactionValue decimalsDict)
+                        Result.withDefault "Invalid price" (TransactionUtils.getFullPrice transactionData decimalsDict)
                 in
                 { isIncome = isIncome
                 , price = fullPrice
@@ -148,58 +174,42 @@ containerHeight =
     2160
 
 
-config : IL.Config ListItem Msg
+config : InfiniteList.Config ListItem Msg
 config =
-    IL.config
+    InfiniteList.config
         { itemView = itemView
-        , itemHeight = IL.withConstantHeight itemHeight
+        , itemHeight = InfiniteList.withConstantHeight itemHeight
         , containerHeight = containerHeight
         }
-        |> IL.withOffset 300
-        |> IL.withKeepFirst 1
+        |> InfiniteList.withOffset 300
+        |> InfiniteList.withKeepFirst 1
 
 
-getMessageView : Transactions -> List DisplayedTransaction -> List DisplayedTransaction -> Html Msg
-getMessageView transactions availableTransactionsToDisplay sortedTransactions =
+getMessageView : List DisplayedTransaction -> List DisplayedTransaction -> Html Msg
+getMessageView availableTransactionsToDisplay sortedTransactions =
     let
         getMessage msg =
             div [ c "statusMessage" ] [ text msg ]
     in
-    case transactions of
-        NotSignedIn ->
-            getMessage "Initializing..."
+    case availableTransactionsToDisplay of
+        [] ->
+            getMessage "You currently have no transactions. Add them by using \"+\" button in the bottom right corner of the screen"
 
-        Loading _ ->
-            getMessage "Loading..."
-
-        Loaded _ ->
-            case availableTransactionsToDisplay of
+        _ ->
+            case sortedTransactions of
                 [] ->
-                    getMessage "You currently have no transactions. Add them by using \"+\" button in the bottom right corner of the screen"
+                    getMessage "No search results"
 
                 _ ->
-                    case sortedTransactions of
-                        [] ->
-                            getMessage "No search results"
-
-                        _ ->
-                            text ""
-
-        Error errorText ->
-            getMessage errorText
+                    text ""
 
 
 viewTransactions : Transactions -> Model -> List (Html Msg)
 viewTransactions transactions model =
     let
         availableTransactionsToDisplay =
-            case transactions of
-                Loaded _ ->
-                    transactions
-                        |> transactionsToDisplayedTransactions
-
-                _ ->
-                    []
+            transactions
+                |> transactionsToDisplayedTransactions
 
         sortedTransactions =
             availableTransactionsToDisplay
@@ -207,8 +217,8 @@ viewTransactions transactions model =
                 |> sortTransactions
     in
     [ div
-        [ c "infList", IL.onScroll InfListMsg ]
-        [ IL.view
+        [ c "infList", InfiniteList.onScroll InfListMsg ]
+        [ InfiniteList.view
             config
             model.infList
             (Header model.search
@@ -217,16 +227,45 @@ viewTransactions transactions model =
                    )
             )
         ]
-    , getMessageView transactions availableTransactionsToDisplay sortedTransactions
+    , getMessageView availableTransactionsToDisplay sortedTransactions
     ]
 
 
-init : MainModel -> ( Model, Cmd Msg )
-init _ =
-    ( { search = ""
-      , infList = IL.init
+type InitType
+    = Edit String
+    | New
+    | NoDialog
+
+
+init : InitType -> Store.SignedInStore -> ( Model, Cmd Msg )
+init initType signedInStore =
+    let
+        hasDialog ( dialogModel, dialogCmd ) =
+            ( DialogModel dialogModel, Just dialogCmd )
+
+        ( transactionDialogModel, transactionDialogMsg ) =
+            case initType of
+                New ->
+                    TransactionDialog.init TransactionDialog.New signedInStore
+                        |> hasDialog
+
+                Edit id ->
+                    TransactionDialog.init (TransactionDialog.Edit id) signedInStore
+                        |> hasDialog
+
+                NoDialog ->
+                    ( WithoutDialog signedInStore, Nothing )
+    in
+    ( { dialogModel = transactionDialogModel
+      , search = ""
+      , infList = InfiniteList.init
       }
-    , Cmd.none
+    , case transactionDialogMsg of
+        Nothing ->
+            Cmd.none
+
+        Just cmd ->
+            Cmd.map GotDialogMsg cmd
     )
 
 
@@ -291,11 +330,15 @@ itemView _ _ item =
             transactionItemView displayedTransaction
 
 
-view : Transactions -> Model -> Html Msg
-view transactions model =
+view : Model -> Html Msg
+view model =
     div [ class "TransactionsList page" ]
         (List.concat
-            [ viewTransactions transactions model
+            [ viewTransactions
+                (Store.transactions
+                    (getSignedInStore model)
+                )
+                model
             , [ a
                     [ class "roundButton"
                     , Route.href Route.TransactionNew
@@ -304,6 +347,13 @@ view transactions model =
                     [ span [ attribute "aria-hidden" "true" ] [ text "+" ]
                     , span [ class "visuallyHidden" ] [ text "Add Transaction" ]
                     ]
+              ]
+            , [ case model.dialogModel of
+                    WithoutDialog _ ->
+                        text ""
+
+                    DialogModel m ->
+                        Html.map GotDialogMsg (TransactionDialog.view m)
               ]
             ]
         )
@@ -315,11 +365,12 @@ view transactions model =
 
 type Msg
     = SearchInput String
-    | InfListMsg IL.Model
+    | InfListMsg InfiniteList.Model
+    | GotDialogMsg TransactionDialog.Msg
 
 
-update : MainModel -> Msg -> Model -> ( Model, Cmd Msg )
-update _ msg model =
+update : Msg -> Model -> ( Model, Cmd Msg )
+update msg model =
     case msg of
         SearchInput str ->
             ( { model | search = str }, Cmd.none )
@@ -327,7 +378,16 @@ update _ msg model =
         InfListMsg infList ->
             ( { model | infList = infList }, Cmd.none )
 
+        GotDialogMsg dialogMsg ->
+            case model.dialogModel of
+                WithoutDialog _ ->
+                    ( model, Cmd.none )
 
-subscriptions : Model -> Sub Msg
-subscriptions _ =
-    Sub.none
+                DialogModel dialogModel ->
+                    let
+                        ( newDialogModel, newDialogCmd ) =
+                            TransactionDialog.update dialogMsg dialogModel
+                    in
+                    ( { model | dialogModel = DialogModel newDialogModel }
+                    , Cmd.map GotDialogMsg newDialogCmd
+                    )

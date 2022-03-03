@@ -35,8 +35,10 @@ const getEncryptionKey = async (
   )
 }
 
-export const encrypt = async (json: string): Promise<Uint8Array> => {
-  const { password, transactions } = JSON.parse(json)
+export const encrypt = async (
+  password: string,
+  transactions: string,
+): Promise<Uint8Array> => {
   const salt = crypto.getRandomValues(new Uint8Array(SALT_LENGTH))
   const iv = crypto.getRandomValues(new Uint8Array(IV_LENGTH))
   const encrypted = await crypto.subtle.encrypt(

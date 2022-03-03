@@ -1,8 +1,8 @@
 module Cred exposing
     ( Cred
-    , CredValue
-    , credToCredValue
-    , credValueToCred
+    , Data
+    , credDataToCred
+    , credToCredData
     , getUsername
     , tempCred
     , toJsonString
@@ -11,7 +11,7 @@ module Cred exposing
 import Json.Encode as Encode
 
 
-type alias CredValue =
+type alias Data =
     { username : String
     , deviceName : String
     , password : String
@@ -19,7 +19,7 @@ type alias CredValue =
 
 
 type Cred
-    = Cred CredValue
+    = Cred Data
 
 
 getUsername : Cred -> String
@@ -27,22 +27,22 @@ getUsername (Cred { username }) =
     username
 
 
-credValueToCred : CredValue -> Maybe Cred
-credValueToCred credValue =
+credDataToCred : Data -> Maybe Cred
+credDataToCred credData =
     let
         { username, deviceName, password } =
-            credValue
+            credData
     in
     if username /= "" && deviceName /= "" && password /= "" then
-        Just (Cred credValue)
+        Just (Cred credData)
 
     else
         Nothing
 
 
-credToCredValue : Cred -> CredValue
-credToCredValue (Cred credValue) =
-    credValue
+credToCredData : Cred -> Data
+credToCredData (Cred credData) =
+    credData
 
 
 toJsonString : Cred -> String

@@ -16,4 +16,4 @@
 @import '../../Page/SignIn.css';
 @import '../../Page/TransactionList.css';
 @import '../../Page/CSV.css';
-@import '../../Page/TransactionDialog.css';
+@import '../../Dialog/TransactionDialog.css';

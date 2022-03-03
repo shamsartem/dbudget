@@ -1,7 +1,8 @@
 export default (
   app: ElmApp,
-  msg: 'gotTransactionsFromIdb' | 'gotTransactionsFromPeer',
+  msg: 'wrongPassword' | 'signInSuccess' | 'gotTransactionsFromPeer',
   payload: string,
 ): void => {
-  app.ports.sendToElm.send(`{"msg":"${msg}","payload":${payload}}`)
+  const payloadString = payload ? `,"payload":${payload}` : ''
+  app.ports.sendToElm.send(`{"msg":"${msg}"${payloadString}}`)
 }

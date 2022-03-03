@@ -16,4 +16,8 @@
       margin-bottom: 15px;
     }
   }
+
+  &_wrongPassword {
+    color: var(--c-danger);
+  }
 }

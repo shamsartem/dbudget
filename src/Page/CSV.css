@@ -2,6 +2,7 @@
   display: flex;
   flex-grow: 1;
   align-items: center;
+  overflow-y: scroll;
 
   &_container {
     display: flex;
