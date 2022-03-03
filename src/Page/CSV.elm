@@ -320,8 +320,8 @@ update msg model =
                                     , "Description"
                                     , "Currency"
                                     , "Id"
-                                    , "LastUpdate"
-                                    , "IsDeleted"
+                                    , "Last Updated"
+                                    , "Is Deleted"
                                     ]
                                 , records = list
                                 }

@@ -201,7 +201,7 @@ init initType store signedInData =
         transactionsDict =
             Transaction.getTransactionsDict transactions
 
-        getDialogData transactionData =
+        getDialogData isDirty transactionData =
             let
                 notDeletedTransactionDataList =
                     Transaction.getNotDeletedTransactionDataList transactions
@@ -213,13 +213,13 @@ init initType store signedInData =
             in
             { transactionData = transactionData
             , dirtyRecord =
-                { date = False
-                , category = False
-                , name = False
-                , price = False
-                , amount = False
-                , description = False
-                , currency = False
+                { date = isDirty
+                , category = isDirty
+                , name = isDirty
+                , price = isDirty
+                , amount = isDirty
+                , description = isDirty
+                , currency = isDirty
                 }
             , isButtonsDisabled = False
             , currentTimeZone = Nothing
@@ -231,7 +231,7 @@ init initType store signedInData =
         ( dialog, newStore ) =
             case initType of
                 Invalid transactionData ->
-                    ( InvalidTransaction (getDialogData transactionData), store )
+                    ( InvalidTransaction (getDialogData True transactionData), store )
 
                 Edit uuidString ->
                     case Dict.get uuidString transactionsDict of
@@ -247,7 +247,7 @@ init initType store signedInData =
                                 ( TransactionIsDeleted, store )
 
                             else
-                                ( EditTransaction (getDialogData transactionData), store )
+                                ( EditTransaction (getDialogData False transactionData), store )
 
                 New ->
                     let
@@ -257,7 +257,7 @@ init initType store signedInData =
                         transactionData =
                             Transaction.getNewTransactionTemplate transactions uuid
                     in
-                    ( NewTransaction (getDialogData transactionData), newS )
+                    ( NewTransaction (getDialogData False transactionData), newS )
     in
     ( { store = newStore
       , signedInData = signedInData
@@ -289,7 +289,8 @@ view model =
             viewTransactionForm dialogData
                 model
                 (button
-                    [ class "button Transaction_button"
+                    [ class "button"
+                    , c "button"
                     , disabled dialogData.isButtonsDisabled
                     , type_ "button"
                     ]
@@ -300,7 +301,8 @@ view model =
             viewTransactionForm dialogData
                 model
                 (button
-                    [ class "button Transaction_button"
+                    [ class "button"
+                    , c "button"
                     , onClick DeleteClicked
                     , disabled dialogData.isButtonsDisabled
                     , type_ "button"
@@ -312,12 +314,14 @@ view model =
             viewTransactionForm dialogData
                 model
                 (button
-                    [ class "button Transaction_button"
+                    [ class "button"
+                    , c "button"
+                    , onClick DeleteClicked
                     , disabled
                         dialogData.isButtonsDisabled
                     , type_ "button"
                     ]
-                    [ text "Delete" ]
+                    [ text "Dismiss" ]
                 )
 
         NoTransactionWithThisId ->
@@ -928,7 +932,12 @@ update msg model =
             )
 
         DeleteClicked ->
-            ( model, getTime GotTimeNowBeforeDelete )
+            case dialog of
+                InvalidTransaction _ ->
+                    ( model, pushUrlBack )
+
+                _ ->
+                    ( model, getTime GotTimeNowBeforeDelete )
 
         Saved ->
             case dialog of

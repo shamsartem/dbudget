@@ -76,7 +76,7 @@ modelValidator =
     Validate.all
         [ ifBlank .deviceName ( DeviceName, "Device name is missing" )
         , ifBlank .password ( Password, "Password is missing" )
-        , ifBlank .username ( Username, "Username is missing klj lkj klj kljkl jkl jklj lkjlk j" )
+        , ifBlank .username ( Username, "Username is missing" )
         ]
 
 

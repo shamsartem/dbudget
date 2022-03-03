@@ -1,20 +1,20 @@
 {
-	"background_color": "#171717",
-	"theme_color": "#e3e6e8",
-	"name": "dbudget",
-	"short_name": "dbudget",
-	"display": "standalone",
-	"start_url": "/",
-	"icons": [
-		{
-			"src": "logo-192.png",
-			"sizes": "192x192",
-			"type": "image/png"
-		},
-		{
-			"src": "logo-512.png",
-			"sizes": "512x512",
-			"type": "image/png"
-		}
-	]
+  "background_color": "#171717",
+  "theme_color": "#e3e6e8",
+  "name": "dbudget",
+  "short_name": "dbudget",
+  "display": "standalone",
+  "start_url": "/",
+  "icons": [
+    {
+      "src": "android-chrome-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "android-chrome-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
 }
