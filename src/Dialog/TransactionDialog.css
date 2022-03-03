@@ -67,6 +67,10 @@
   &_fullPrice {
     height: 20px;
     margin-top: 10px;
+
+    &__error {
+      color: var(--c-danger);
+    }
   }
 
   &_buttons {

@@ -1,4 +1,12 @@
-module Page.CSV exposing (Model, Msg, getStore, init, update, view)
+module Page.CSV exposing
+    ( Model
+    , Msg
+    , getStore
+    , init
+    , subscriptions
+    , update
+    , view
+    )
 
 import Array exposing (Array)
 import Cred
@@ -12,17 +20,19 @@ import Html exposing (..)
 import Html.Attributes exposing (class)
 import Html.Events exposing (onClick)
 import Port
-import Store exposing (Store, invalidTransactionData)
+import Store exposing (Store)
 import Task
 import Time exposing (Posix)
-import Transaction.Transactions as Transactions
-import Transaction.Utils as TransactionUtils
+import Transaction
 import View.Header as Header exposing (viewHeader)
 
 
 type DialogModel
     = DialogModel TransactionDialog.Model
-    | WithoutDialog Store.SignedInStore
+    | WithoutDialog
+        { store : Store
+        , signedInData : Store.SignedInData
+        }
 
 
 baseClassName : String
@@ -54,27 +64,31 @@ type alias Model =
     }
 
 
-getSignedInStore : Model -> Store.SignedInStore
-getSignedInStore { dialogModel } =
-    case dialogModel of
-        WithoutDialog sigedInStore ->
-            sigedInStore
-
-        DialogModel m ->
-            TransactionDialog.getSignedInStore m
-
-
 getStore : Model -> Store
 getStore model =
-    getSignedInStore model |> Store.signedInStoreToStore
+    case model.dialogModel of
+        WithoutDialog m ->
+            Store.getStore m
+
+        DialogModel m ->
+            Store.getStore m
 
 
-init : Store.SignedInStore -> ( Model, Cmd Msg )
-init signedInStore =
+getSignedInData : Model -> Store.SignedInData
+getSignedInData model =
+    case model.dialogModel of
+        WithoutDialog { signedInData } ->
+            signedInData
+
+        DialogModel m ->
+            TransactionDialog.getSignedInData m
+
+
+init : Store -> Store.SignedInData -> ( Model, Cmd Msg )
+init store signedInData =
     let
-        invalidTransactionData =
-            signedInStore
-                |> Store.invalidTransactionData
+        { invalidTransactionData } =
+            signedInData
 
         maybeFirstInvalidTransaction =
             invalidTransactionData
@@ -86,22 +100,18 @@ init signedInStore =
         ( transactionDialogModel, transactionDialogMsg ) =
             case maybeFirstInvalidTransaction of
                 Nothing ->
-                    ( WithoutDialog signedInStore, Nothing )
+                    ( WithoutDialog { store = store, signedInData = signedInData }, Nothing )
 
                 Just invalidTransaction ->
                     TransactionDialog.init
                         (TransactionDialog.Invalid invalidTransaction)
-                        (signedInStore
-                            |> Store.updateSignedInData
-                                (\s ->
-                                    { s
-                                        | invalidTransactionData =
-                                            Maybe.withDefault
-                                                []
-                                                (List.tail invalidTransactionData)
-                                    }
-                                )
-                        )
+                        store
+                        { signedInData
+                            | invalidTransactionData =
+                                Maybe.withDefault
+                                    []
+                                    (List.tail invalidTransactionData)
+                        }
                         |> hasDialog
     in
     ( { dialogModel = transactionDialogModel
@@ -169,8 +179,11 @@ type Msg
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     let
-        signedInStore =
-            model |> getSignedInStore
+        signedInData =
+            getSignedInData model
+
+        store =
+            getStore model
     in
     case msg of
         CsvRequested ->
@@ -229,14 +242,11 @@ update msg model =
         GotTimeNowAfterCsvParsed records timeNow ->
             let
                 { password, username } =
-                    Cred.credToCredData (signedInStore |> Store.cred)
+                    Cred.credToCredData signedInData.cred
 
-                ( transactionsDict, invalidTransactionData, uuidSeed ) =
-                    Transactions.listOfRowsToTransactionsDict
-                        (signedInStore
-                            |> Store.signedInStoreToStore
-                            |> Store.uuidSeed
-                        )
+                ( transactionsDict, invalidTransactionData, newUuidSeed ) =
+                    Transaction.listOfRowsToTransactionsDict
+                        store.uuidSeed
                         timeNow
                         records
 
@@ -244,30 +254,27 @@ update msg model =
                     invalidTransactionData |> List.head
 
                 newTransactions =
-                    TransactionUtils.mergeTransactions
-                        (Store.transactions signedInStore)
+                    Transaction.mergeTransactions
+                        signedInData.transactions
                         transactionsDict
 
-                newSignedInStore =
-                    signedInStore
-                        |> Store.updateSignedInData
-                            (\signedInData ->
-                                { signedInData
-                                    | transactions = newTransactions
-                                    , invalidTransactionData =
-                                        Maybe.withDefault
-                                            []
-                                            (List.tail invalidTransactionData)
-                                }
-                            )
-                        |> Store.updateAlwaysInStoreSignedIn
-                            (\s -> { s | uuidSeed = uuidSeed })
+                newStore =
+                    { store | uuidSeed = newUuidSeed }
+
+                newSignedInData =
+                    { signedInData
+                        | transactions = newTransactions
+                        , invalidTransactionData =
+                            Maybe.withDefault
+                                []
+                                (List.tail invalidTransactionData)
+                    }
 
                 updateBasedOnInvalidTransactionData dialogModel cmd =
                     ( { model | dialogModel = dialogModel }
                     , Cmd.batch
                         [ Port.updatedTransactions
-                            (Transactions.toJsonValue newTransactions)
+                            (Transaction.toJsonValue newTransactions)
                             password
                             username
                         , cmd
@@ -277,7 +284,11 @@ update msg model =
             case maybeFirstInvalidTransaction of
                 Nothing ->
                     updateBasedOnInvalidTransactionData
-                        (WithoutDialog (getSignedInStore model))
+                        (WithoutDialog
+                            { store = newStore
+                            , signedInData = newSignedInData
+                            }
+                        )
                         Cmd.none
 
                 Just invalidTransaction ->
@@ -285,7 +296,8 @@ update msg model =
                         ( m, cm ) =
                             TransactionDialog.init
                                 (TransactionDialog.Invalid invalidTransaction)
-                                newSignedInStore
+                                newStore
+                                newSignedInData
                     in
                     updateBasedOnInvalidTransactionData
                         (DialogModel m)
@@ -294,10 +306,9 @@ update msg model =
         CsvExport ->
             let
                 csvString =
-                    signedInStore
-                        |> Store.transactions
-                        |> Transactions.getTransactionsDict
-                        |> Transactions.toListOfListsOfStrings
+                    signedInData.transactions
+                        |> Transaction.getTransactionsDict
+                        |> Transaction.toListOfListsOfStrings
                         |> (\list ->
                                 { headers =
                                     [ "Is Income"
@@ -334,3 +345,8 @@ update msg model =
                     ( { model | dialogModel = DialogModel newDialogModel }
                     , Cmd.map GotDialogMsg newDialogCmd
                     )
+
+
+subscriptions : Sub Msg
+subscriptions =
+    Sub.map GotDialogMsg TransactionDialog.subscriptions

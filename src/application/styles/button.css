@@ -29,6 +29,10 @@
     0 1px 5px 0 rgba(0, 0, 0, 0.2);
   cursor: pointer;
   transition: box-shadow var(--t);
+  @media (--m) {
+    right: 70px;
+    bottom: 70px;
+  }
 
   &:hover {
     box-shadow:

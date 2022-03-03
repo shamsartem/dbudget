@@ -1,14 +1,15 @@
 module Page.SignIn exposing (Model, Msg(..), getStore, init, subscriptions, update, view)
 
-import Cred
+import Browser.Navigation as Nav
+import Cred exposing (Cred)
 import Html exposing (..)
-import Html.Attributes exposing (class, novalidate)
+import Html.Attributes exposing (class, classList, disabled, novalidate)
 import Html.Events exposing (onSubmit)
 import Json.Decode as Decode
 import Port
 import Store exposing (Store)
-import Task
-import Transaction.Transactions as Transactions
+import Transaction
+import Url
 import Validate exposing (Validator, ifBlank, validate)
 import View.Input as Input
 
@@ -22,12 +23,12 @@ type alias DirtyRecord =
 
 type SignInState
     = SignInNotAttempted
-    | SignedInAndLoading
+    | SignedInAndLoading Cred
     | WrongPassword
 
 
 type alias Model =
-    { signedOutStore : Store.SignedOutStore
+    { store : Store
     , deviceName : String
     , password : String
     , username : String
@@ -37,8 +38,8 @@ type alias Model =
 
 
 getStore : Model -> Store
-getStore { signedOutStore } =
-    Store.signedOutStoreToStore signedOutStore
+getStore { store } =
+    store
 
 
 baseClassName : String
@@ -75,7 +76,7 @@ modelValidator =
     Validate.all
         [ ifBlank .deviceName ( DeviceName, "Device name is missing" )
         , ifBlank .password ( Password, "Password is missing" )
-        , ifBlank .username ( Username, "Username is missing" )
+        , ifBlank .username ( Username, "Username is missing klj lkj klj kljkl jkl jklj lkjlk j" )
         ]
 
 
@@ -84,9 +85,9 @@ validateModel model =
     validate modelValidator model
 
 
-init : Store.SignedOutStore -> ( Model, Cmd Msg )
+init : Store -> ( Model, Cmd Msg )
 init store =
-    ( { signedOutStore = store
+    ( { store = store
       , username = ""
       , password = ""
       , deviceName = ""
@@ -122,11 +123,37 @@ view model =
                         |> List.filter (\( t, _ ) -> t == field)
                         |> List.head
                         |> Maybe.map (\( _, err ) -> err)
+
+        getBlurHandler field =
+            case model.signInState of
+                SignedInAndLoading _ ->
+                    Nothing
+
+                _ ->
+                    Just (BluredFromField field)
+
+        isDisabled =
+            case model.signInState of
+                SignedInAndLoading _ ->
+                    True
+
+                _ ->
+                    False
     in
     div [ class baseClassName, class "page" ]
         [ h1 [ c "title", class "title" ] [ text "Sign in" ]
+        , case model.signInState of
+            SignInNotAttempted ->
+                text ""
+
+            SignedInAndLoading _ ->
+                div [ c "state" ] [ text "Loading..." ]
+
+            WrongPassword ->
+                div [ c "state", c "state__wrongPassword" ] [ text "Wrong password" ]
         , form
             [ c "form"
+            , classList [ ( cl "form__disabled", isDisabled ) ]
             , onSubmit SignIn
             , novalidate True
             ]
@@ -134,11 +161,11 @@ view model =
                 { label = "Username"
                 , onInput = LoginInput
                 , value = model.username
-                , onBlur = Just (BluredFromField Username)
+                , onBlur = getBlurHandler Username
                 , required = True
                 , hasPlaceholder = False
                 , id = "username"
-                , otherAttributes = []
+                , otherAttributes = [ disabled isDisabled ]
                 , textUnderInput = Input.Error (getError Username)
                 , dirty = model.dirtyRecord.username
                 , maybeDatalist = Nothing
@@ -146,12 +173,12 @@ view model =
             , Input.view
                 { label = "Password"
                 , onInput = PasswordInput
-                , onBlur = Just (BluredFromField Password)
+                , onBlur = getBlurHandler Password
                 , value = model.password
                 , required = True
                 , hasPlaceholder = False
                 , id = "password"
-                , otherAttributes = []
+                , otherAttributes = [ disabled isDisabled ]
                 , textUnderInput = Input.Error (getError Password)
                 , dirty = model.dirtyRecord.password
                 , maybeDatalist = Nothing
@@ -159,26 +186,17 @@ view model =
             , Input.view
                 { label = "Device name"
                 , onInput = DeviceNameInput
-                , onBlur = Just (BluredFromField DeviceName)
+                , onBlur = getBlurHandler DeviceName
                 , value = model.deviceName
                 , required = True
                 , hasPlaceholder = False
                 , id = "deviceName"
-                , otherAttributes = []
+                , otherAttributes = [ disabled isDisabled ]
                 , textUnderInput = Input.Error (getError DeviceName)
                 , dirty = model.dirtyRecord.deviceName
                 , maybeDatalist = Nothing
                 }
-            , case model.signInState of
-                SignInNotAttempted ->
-                    text ""
-
-                SignedInAndLoading ->
-                    div [ c "loading" ] [ text "Loading..." ]
-
-                WrongPassword ->
-                    div [ c "wrongPassword" ] [ text "Wrong password" ]
-            , button [ class "button" ] [ text "Sign in" ]
+            , button [ class "button", disabled isDisabled ] [ text "Sign in" ]
             ]
         ]
 
@@ -190,7 +208,6 @@ type Msg
     | BluredFromField Field
     | SignIn
     | SentToElm String
-    | SignInSuccess Store.SignedInStore
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -199,6 +216,9 @@ update msg model =
         updateDirtyRecord : (DirtyRecord -> DirtyRecord) -> Model -> ( Model, Cmd Msg )
         updateDirtyRecord transform { dirtyRecord } =
             ( { model | dirtyRecord = transform dirtyRecord }, Cmd.none )
+
+        { store } =
+            model
     in
     case msg of
         LoginInput str ->
@@ -224,7 +244,7 @@ update msg model =
             of
                 Just cred ->
                     ( { model
-                        | signInState = SignedInAndLoading
+                        | signInState = SignedInAndLoading cred
                       }
                     , Port.handleSignIn (Cred.toJsonString cred)
                     )
@@ -251,42 +271,35 @@ update msg model =
                 Ok sentToElm ->
                     case sentToElm.msg of
                         "signInSuccess" ->
-                            case
-                                model
-                                    |> getCredValue
-                                    |> Cred.credDataToCred
-                            of
-                                Just cred ->
+                            case model.signInState of
+                                SignedInAndLoading cred ->
                                     let
                                         -- ignore invalid because there should
                                         -- should only be valid in local storage
                                         ( transactionsDict, _, _ ) =
-                                            Transactions.stringToTransactionDict
-                                                (model.signedOutStore
-                                                    |> Store.signedOutStoreToStore
-                                                    |> Store.uuidSeed
-                                                )
+                                            Transaction.stringToTransactionDict
+                                                store.uuidSeed
                                                 m
 
                                         transactions =
-                                            Transactions.getTransactions transactionsDict
+                                            Transaction.getTransactions transactionsDict
                                     in
-                                    ( model
-                                    , Task.perform
-                                        SignInSuccess
-                                        (Task.succeed
-                                            (Store.signIn
-                                                model.signedOutStore
-                                                { transactions = transactions
-                                                , cred = cred
-                                                , invalidTransactionData = []
-                                                }
-                                            )
-                                        )
+                                    ( { model
+                                        | store =
+                                            { store
+                                                | signedInData =
+                                                    Just
+                                                        { transactions = transactions
+                                                        , cred = cred
+                                                        , invalidTransactionData = []
+                                                        }
+                                            }
+                                      }
+                                    , Nav.pushUrl store.navKey (Url.toString store.url)
                                     )
 
-                                -- Nothing branch should never happen
-                                Nothing ->
+                                -- should never happen
+                                _ ->
                                     ( model, Cmd.none )
 
                         "wrongPassword" ->
@@ -303,9 +316,6 @@ update msg model =
                     -- kind of message coming from js
                     -- even if it as an empty String
                     ( model, Cmd.none )
-
-        SignInSuccess _ ->
-            ( model, Cmd.none )
 
         BluredFromField field ->
             case field of

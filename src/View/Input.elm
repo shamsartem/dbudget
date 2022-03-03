@@ -14,6 +14,7 @@ import Html.Attributes
         , id
         , placeholder
         , required
+        , tabindex
         , title
         , value
         )
@@ -23,6 +24,7 @@ import Html.Events
         , onInput
         )
 import Html.Keyed as Keyed
+import Utils
 
 
 type TextUnderInput
@@ -46,6 +48,21 @@ type alias Config msg =
     }
 
 
+baseClassName : String
+baseClassName =
+    "Input"
+
+
+cl : String -> String
+cl elementAndOrModifier =
+    baseClassName ++ "_" ++ elementAndOrModifier
+
+
+c : String -> Attribute msg
+c elementAndOrModifier =
+    class (cl elementAndOrModifier)
+
+
 textDivKey : String
 textDivKey =
     "3"
@@ -58,9 +75,9 @@ view config =
             if config.required then
                 [ i
                     [ attribute "aria-hidden" "true"
-                    , class "Input_required"
+                    , c "required"
                     , classList
-                        [ ( "Input_required__visible"
+                        [ ( cl "required__visible"
                           , config.required
                           )
                         ]
@@ -76,7 +93,7 @@ view config =
         viewlabel =
             label
                 [ for config.id
-                , class "Input_label"
+                , c "label"
                 , classList
                     [ ( "visuallyHidden"
                       , config.hasPlaceholder
@@ -90,9 +107,9 @@ view config =
 
         defaultinputattributes =
             List.append
-                [ class "Input_input"
+                [ c "input"
                 , classList
-                    [ ( "Input_input__hasErrors"
+                    [ ( cl "input__hasErrors"
                       , case config.textUnderInput of
                             Error maybeError ->
                                 case maybeError of
@@ -105,7 +122,7 @@ view config =
                             _ ->
                                 False
                       )
-                    , ( "Input_input__isHighlighted"
+                    , ( cl "input__isHighlighted"
                       , case config.textUnderInput of
                             Warning maybeWarning ->
                                 case maybeWarning of
@@ -177,20 +194,25 @@ view config =
 
         getEmptyTextUnderInput className =
             [ ( textDivKey
-              , div
-                    [ class className
+              , div [ c "textUnderInputContainer" ]
+                    [ div
+                        [ class className
+                        ]
+                        []
                     ]
-                    []
               )
             ]
 
         getTextUnderInput t className =
             [ ( textDivKey
-              , div
-                    [ class className
-                    , id errorOrWarningId
+              , div [ c "textUnderInputContainer" ]
+                    [ div
+                        [ class className
+                        , id errorOrWarningId
+                        , tabindex 0
+                        ]
+                        [ text t ]
                     ]
-                    [ text t ]
               )
             ]
 
@@ -202,22 +224,49 @@ view config =
                 Error maybeError ->
                     case maybeError of
                         Nothing ->
-                            getEmptyTextUnderInput "Input_textUnderInput Input_textUnderInput__error"
+                            getEmptyTextUnderInput
+                                (Utils.classes
+                                    [ cl "textUnderInput"
+                                    , cl "textUnderInput__error"
+                                    ]
+                                )
 
                         Just error ->
                             if config.dirty then
-                                getTextUnderInput error "Input_textUnderInput Input_textUnderInput__error Input_textUnderInput__visible"
+                                getTextUnderInput error
+                                    (Utils.classes
+                                        [ cl "textUnderInput"
+                                        , cl "textUnderInput__error"
+                                        , cl "textUnderInput__visible"
+                                        ]
+                                    )
 
                             else
-                                getEmptyTextUnderInput "Input_textUnderInput Input_textUnderInput__error"
+                                getEmptyTextUnderInput
+                                    (Utils.classes
+                                        [ cl "textUnderInput"
+                                        , cl "textUnderInput__error"
+                                        ]
+                                    )
 
                 Warning maybeWarning ->
                     case maybeWarning of
                         Nothing ->
-                            getEmptyTextUnderInput "Input_textUnderInput Input_textUnderInput__warning"
+                            getEmptyTextUnderInput
+                                (Utils.classes
+                                    [ cl "textUnderInput"
+                                    , cl "textUnderInput__warning"
+                                    ]
+                                )
 
                         Just error ->
-                            getTextUnderInput error "Input_textUnderInput Input_textUnderInput__warning Input_textUnderInput__visible"
+                            getTextUnderInput error
+                                (Utils.classes
+                                    [ cl "textUnderInput"
+                                    , cl "textUnderInput__warning"
+                                    , cl "textUnderInput__visible"
+                                    ]
+                                )
 
         dataListView =
             case config.maybeDatalist of
@@ -236,7 +285,7 @@ view config =
                     ]
     in
     Keyed.node "div"
-        [ class "Input" ]
+        [ class baseClassName ]
         (List.concat
             [ inputhtml
             , textUnderInput

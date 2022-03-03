@@ -50,25 +50,54 @@
     }
   }
 
+  &_textUnderInputContainer {
+    position: relative;
+    height: 20px;
+  }
+
   &_textUnderInput {
     overflow: hidden;
-    height: 17px;
+    height: 100%;
     margin-top: 2px;
     color: var(--c-danger);
+    cursor: default;
     text-overflow: ellipsis;
     visibility: hidden;
     white-space: nowrap;
 
     &__error {
       color: var(--c-danger);
+
+      &:focus,
+      &:hover {
+        outline: 1px solid var(--c-danger);
+      }
     }
 
     &__warning {
       color: var(--c-warning);
+
+      &:focus,
+      &:hover {
+        outline: 1px solid var(--c-warning);
+      }
     }
 
     &__visible {
       visibility: visible;
+    }
+
+    &:focus,
+    &:hover {
+      position: absolute;
+      z-index: 1;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: auto;
+      background-color: var(--c-gray-1);
+      border-radius: var(--bdrs-sm);
+      white-space: normal;
     }
   }
 }

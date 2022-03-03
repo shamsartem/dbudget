@@ -5,19 +5,28 @@
   justify-content: center;
 
   &_title {
-    margin-bottom: 15px;
+    margin-bottom: 10px;
   }
 
   &_form {
     display: flex;
+    width: 260px;
     flex-direction: column;
+
+    &__disabled {
+      opacity: 0.4;
+    }
 
     & > :not(*:last-child) {
       margin-bottom: 15px;
     }
   }
 
-  &_wrongPassword {
-    color: var(--c-danger);
+  &_state {
+    margin-bottom: 15px;
+
+    &__wrongPassword {
+      color: var(--c-danger);
+    }
   }
 }

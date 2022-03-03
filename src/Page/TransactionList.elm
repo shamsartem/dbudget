@@ -6,6 +6,7 @@ module Page.TransactionList exposing
     , getStore
     , getTitle
     , init
+    , subscriptions
     , update
     , view
     )
@@ -19,9 +20,7 @@ import Result exposing (Result(..))
 import Route exposing (Route(..))
 import Store exposing (Store)
 import Time
-import Transaction.Field exposing (Field(..))
-import Transaction.Transactions as Transactions exposing (Transactions)
-import Transaction.Utils as TransactionUtils
+import Transaction
 import View.Header as Header exposing (viewHeader)
 import View.Input as Input
 
@@ -39,7 +38,10 @@ type alias DisplayedTransaction =
 
 type DialogModel
     = DialogModel TransactionDialog.Model
-    | WithoutDialog Store.SignedInStore
+    | WithoutDialog
+        { store : Store
+        , signedInData : Store.SignedInData
+        }
 
 
 type alias Model =
@@ -59,19 +61,24 @@ getTitle { dialogModel } =
             "Transactions"
 
 
-getSignedInStore : Model -> Store.SignedInStore
-getSignedInStore { dialogModel } =
-    case dialogModel of
-        WithoutDialog sigedInStore ->
-            sigedInStore
-
-        DialogModel m ->
-            TransactionDialog.getSignedInStore m
-
-
 getStore : Model -> Store
 getStore model =
-    getSignedInStore model |> Store.signedInStoreToStore
+    case model.dialogModel of
+        WithoutDialog m ->
+            Store.getStore m
+
+        DialogModel m ->
+            Store.getStore m
+
+
+getSignedInData : Model -> Store.SignedInData
+getSignedInData model =
+    case model.dialogModel of
+        WithoutDialog { signedInData } ->
+            signedInData
+
+        DialogModel m ->
+            TransactionDialog.getSignedInData m
 
 
 type ListItem
@@ -89,14 +96,16 @@ c elementAndOrModifier =
     class (cl elementAndOrModifier)
 
 
-transactionsToDisplayedTransactions : Transactions -> List DisplayedTransaction
+transactionsToDisplayedTransactions :
+    Transaction.Transactions
+    -> List DisplayedTransaction
 transactionsToDisplayedTransactions transactions =
     let
         notDeletedTransactionDataList =
-            Transactions.getNotDeletedTransactionDataList transactions
+            Transaction.getNotDeletedTransactionDataList transactions
 
         decimalsDict =
-            Transactions.getDecimalsDict transactions
+            Transaction.getDecimalsDict transactions
     in
     notDeletedTransactionDataList
         |> List.map
@@ -106,7 +115,13 @@ transactionsToDisplayedTransactions transactions =
                         transactionData
 
                     fullPrice =
-                        Result.withDefault "Invalid price" (TransactionUtils.getFullPrice transactionData decimalsDict)
+                        Result.withDefault
+                            -- should never happen because this is validated
+                            "Invalid price"
+                            (Transaction.getFullPrice
+                                transactionData
+                                decimalsDict
+                            )
                 in
                 { isIncome = isIncome
                 , price = fullPrice
@@ -204,11 +219,13 @@ getMessageView availableTransactionsToDisplay sortedTransactions =
                     text ""
 
 
-viewTransactions : Transactions -> Model -> List (Html Msg)
-viewTransactions transactions model =
+viewTransactions : Model -> List (Html Msg)
+viewTransactions model =
     let
         availableTransactionsToDisplay =
-            transactions
+            model
+                |> getSignedInData
+                |> .transactions
                 |> transactionsToDisplayedTransactions
 
         sortedTransactions =
@@ -237,8 +254,8 @@ type InitType
     | NoDialog
 
 
-init : InitType -> Store.SignedInStore -> ( Model, Cmd Msg )
-init initType signedInStore =
+init : InitType -> Store -> Store.SignedInData -> ( Model, Cmd Msg )
+init initType store signedInData =
     let
         hasDialog ( dialogModel, dialogCmd ) =
             ( DialogModel dialogModel, Just dialogCmd )
@@ -246,15 +263,26 @@ init initType signedInStore =
         ( transactionDialogModel, transactionDialogMsg ) =
             case initType of
                 New ->
-                    TransactionDialog.init TransactionDialog.New signedInStore
+                    TransactionDialog.init
+                        TransactionDialog.New
+                        store
+                        signedInData
                         |> hasDialog
 
                 Edit id ->
-                    TransactionDialog.init (TransactionDialog.Edit id) signedInStore
+                    TransactionDialog.init
+                        (TransactionDialog.Edit id)
+                        store
+                        signedInData
                         |> hasDialog
 
                 NoDialog ->
-                    ( WithoutDialog signedInStore, Nothing )
+                    ( WithoutDialog
+                        { store = store
+                        , signedInData = signedInData
+                        }
+                    , Nothing
+                    )
     in
     ( { dialogModel = transactionDialogModel
       , search = ""
@@ -334,11 +362,7 @@ view : Model -> Html Msg
 view model =
     div [ class "TransactionsList page" ]
         (List.concat
-            [ viewTransactions
-                (Store.transactions
-                    (getSignedInStore model)
-                )
-                model
+            [ viewTransactions model
             , [ a
                     [ class "roundButton"
                     , Route.href Route.TransactionNew
@@ -391,3 +415,8 @@ update msg model =
                     ( { model | dialogModel = DialogModel newDialogModel }
                     , Cmd.map GotDialogMsg newDialogCmd
                     )
+
+
+subscriptions : Sub Msg
+subscriptions =
+    Sub.map GotDialogMsg TransactionDialog.subscriptions

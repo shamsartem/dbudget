@@ -2,6 +2,7 @@
   "extends": ["stylelint-config-standard", "stylelint-config-idiomatic-order"],
   "plugins": ["stylelint-no-unsupported-browser-features"],
   "rules": {
-    "plugin/no-unsupported-browser-features": [true, { "severity": "warning" }]
+    "plugin/no-unsupported-browser-features": [true, { "severity": "warning" }],
+    "at-rule-empty-line-before": ["always", { "except": ["inside-block"] }]
   }
 }

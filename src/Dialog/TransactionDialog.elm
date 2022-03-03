@@ -1,9 +1,10 @@
 module Dialog.TransactionDialog exposing
     ( Dialog(..)
     , InitType(..)
-    , Model(..)
+    , Model
     , Msg
-    , getSignedInStore
+    , getSignedInData
+    , getStore
     , getTitle
     , init
     , subscriptions
@@ -17,19 +18,16 @@ import Cred
 import Dict
 import Html exposing (..)
 import Html.Attributes exposing (class, disabled, id, novalidate, type_)
-import Html.Events exposing (onClick)
+import Html.Events exposing (onClick, onSubmit)
 import Json.Decode as Decode
 import Numeric.Decimal as Decimal
 import Numeric.Nat as Nat
 import Port
 import Route
-import Store
+import Store exposing (Store)
 import Task
 import Time exposing (Posix)
-import Transaction.Field as Field exposing (Field(..))
-import Transaction.Transaction as Transaction
-import Transaction.Transactions as Transactions
-import Transaction.Utils as TransactionUtils
+import Transaction
 import View.Checkbox exposing (viewCheckbox)
 import View.Input as Input
 
@@ -70,8 +68,11 @@ type Dialog
     | TransactionIsDeleted
 
 
-type Model
-    = Model Store.SignedInStore Dialog
+type alias Model =
+    { store : Store
+    , signedInData : Store.SignedInData
+    , dialog : Dialog
+    }
 
 
 baseClassName : String
@@ -90,7 +91,7 @@ c elementAndOrModifier =
 
 
 getTitle : Model -> String
-getTitle (Model _ dialog) =
+getTitle { dialog } =
     case dialog of
         InvalidTransaction _ ->
             "Fix invalid transaction"
@@ -118,9 +119,14 @@ closeButtonId =
     "transactionDialogCloseButton"
 
 
-getSignedInStore : Model -> Store.SignedInStore
-getSignedInStore (Model store _) =
-    store
+getStore : Model -> Store
+getStore model =
+    Store.getStore model
+
+
+getSignedInData : Model -> Store.SignedInData
+getSignedInData { signedInData } =
+    signedInData
 
 
 sortByPopularity : List String -> List String
@@ -149,38 +155,6 @@ sortByPopularity transactions =
                     EQ
             )
         |> List.map (\( key, _ ) -> key)
-
-
-getDialogData : Store.SignedInStore -> Transaction.Data -> DialogData
-getDialogData signedInStore transactionData =
-    let
-        transactions =
-            Store.transactions signedInStore
-
-        notDeletedTransactionDataList =
-            Transactions.getNotDeletedTransactionDataList transactions
-
-        filteredBasedOnIsIncome =
-            signedInStoreToFilteredTransactionData
-                notDeletedTransactionDataList
-                transactionData.isIncome
-    in
-    { transactionData = transactionData
-    , dirtyRecord =
-        { date = False
-        , category = False
-        , name = False
-        , price = False
-        , amount = False
-        , description = False
-        , currency = False
-        }
-    , isButtonsDisabled = False
-    , currentTimeZone = Nothing
-    , categories = getCategories filteredBasedOnIsIncome transactionData
-    , names = getNames filteredBasedOnIsIncome transactionData
-    , currencies = getCurrencies notDeletedTransactionDataList transactionData
-    }
 
 
 signedInStoreToFilteredTransactionData : List Transaction.Data -> Bool -> List Transaction.Data
@@ -218,27 +192,51 @@ getCurrencies notDeletedTransactionDataList { currency } =
         |> getStringsContainingField .currency currency
 
 
-init : InitType -> Store.SignedInStore -> ( Model, Cmd Msg )
-init initType signedInStore =
+init : InitType -> Store -> Store.SignedInData -> ( Model, Cmd Msg )
+init initType store signedInData =
     let
-        transactions =
-            Store.transactions signedInStore
+        { transactions } =
+            signedInData
 
         transactionsDict =
-            Transactions.getTransactionsDict transactions
+            Transaction.getTransactionsDict transactions
 
-        getData t =
-            getDialogData signedInStore t
+        getDialogData transactionData =
+            let
+                notDeletedTransactionDataList =
+                    Transaction.getNotDeletedTransactionDataList transactions
 
-        ( dialog, newSignedInStore ) =
+                filteredBasedOnIsIncome =
+                    signedInStoreToFilteredTransactionData
+                        notDeletedTransactionDataList
+                        transactionData.isIncome
+            in
+            { transactionData = transactionData
+            , dirtyRecord =
+                { date = False
+                , category = False
+                , name = False
+                , price = False
+                , amount = False
+                , description = False
+                , currency = False
+                }
+            , isButtonsDisabled = False
+            , currentTimeZone = Nothing
+            , categories = getCategories filteredBasedOnIsIncome transactionData
+            , names = getNames filteredBasedOnIsIncome transactionData
+            , currencies = getCurrencies notDeletedTransactionDataList transactionData
+            }
+
+        ( dialog, newStore ) =
             case initType of
                 Invalid transactionData ->
-                    ( InvalidTransaction (getData transactionData), signedInStore )
+                    ( InvalidTransaction (getDialogData transactionData), store )
 
                 Edit uuidString ->
                     case Dict.get uuidString transactionsDict of
                         Nothing ->
-                            ( NoTransactionWithThisId, signedInStore )
+                            ( NoTransactionWithThisId, store )
 
                         Just transaction ->
                             let
@@ -246,22 +244,25 @@ init initType signedInStore =
                                     Transaction.getTransactionData transaction
                             in
                             if transactionData |> .isDeleted then
-                                ( TransactionIsDeleted, signedInStore )
+                                ( TransactionIsDeleted, store )
 
                             else
-                                ( EditTransaction (getData transactionData), signedInStore )
+                                ( EditTransaction (getDialogData transactionData), store )
 
                 New ->
                     let
-                        ( newStore, uuid ) =
-                            Store.getNewUuid signedInStore
+                        ( newS, uuid ) =
+                            Store.getNewUuid store
 
                         transactionData =
-                            TransactionUtils.getNewTransactionTemplate transactions uuid
+                            Transaction.getNewTransactionTemplate transactions uuid
                     in
-                    ( NewTransaction (getData transactionData), newStore )
+                    ( NewTransaction (getDialogData transactionData), newS )
     in
-    ( Model newSignedInStore dialog
+    ( { store = newStore
+      , signedInData = signedInData
+      , dialog = dialog
+      }
     , Cmd.batch
         [ Task.attempt (\_ -> NoOp) (focus closeButtonId)
         , Time.here
@@ -282,11 +283,7 @@ getTime msg =
 
 view : Model -> Html Msg
 view model =
-    let
-        (Model _ dialog) =
-            model
-    in
-    case dialog of
+    case model.dialog of
         -- TODO handle invalid and new transaction buttons
         NewTransaction dialogData ->
             viewTransactionForm dialogData
@@ -304,7 +301,7 @@ view model =
                 model
                 (button
                     [ class "button Transaction_button"
-                    , onClick BeforeDelete
+                    , onClick DeleteClicked
                     , disabled dialogData.isButtonsDisabled
                     , type_ "button"
                     ]
@@ -408,21 +405,17 @@ viewLastUpdated currentTimeZone lastUpdated =
 viewTransactionForm : DialogData -> Model -> Html Msg -> Html Msg
 viewTransactionForm dialogData model leftButton =
     let
-        (Model signedInStore _) =
-            model
-
         decimalsDict =
-            signedInStore
-                |> Store.transactions
-                |> Transactions.getDecimalsDict
+            model.signedInData.transactions
+                |> Transaction.getDecimalsDict
 
         { transactionData, dirtyRecord, isButtonsDisabled, currentTimeZone, categories, names, currencies } =
             dialogData
 
         validity =
-            Transaction.validateTransactionData transactionData
+            Transaction.validateTransactionData decimalsDict transactionData
 
-        getError : Field.Field -> Maybe String
+        getError : Transaction.Field -> Maybe String
         getError field =
             case validity of
                 Ok _ ->
@@ -439,9 +432,8 @@ viewTransactionForm dialogData model leftButton =
                 [ leftButton
                 , button
                     [ class "button Transaction_button"
-                    , onClick BeforeSave
+                    , onClick SaveClicked
                     , disabled isButtonsDisabled
-                    , type_ "button"
                     ]
                     [ text "Save" ]
                 ]
@@ -459,7 +451,7 @@ viewTransactionForm dialogData model leftButton =
                     Input.Error (Just error)
 
         newDecimals =
-            Field.stringToDecimal transactionData.price Nat.nat0 0
+            Transaction.stringToDecimal transactionData.price Nat.nat0 0
                 |> Result.map (\decimal -> Decimal.getPrecision decimal)
                 |> Result.withDefault Nat.nat0
 
@@ -470,7 +462,7 @@ viewTransactionForm dialogData model leftButton =
 
         textsUnderInputs =
             { category =
-                getTextUnderInput Field.Category
+                getTextUnderInput Transaction.Category
                     (not (List.member transactionData.category categories))
                     ("\""
                         ++ transactionData.category
@@ -484,8 +476,8 @@ viewTransactionForm dialogData model leftButton =
                         ++ " when you save"
                     )
             , name =
-                getTextUnderInput Field.Name
-                    (not (List.member transactionData.name names))
+                getTextUnderInput Transaction.Name
+                    (transactionData.category /= "" && not (List.member transactionData.name names))
                     ("\""
                         ++ transactionData.name
                         ++ "\" will be added to your Category \""
@@ -493,7 +485,7 @@ viewTransactionForm dialogData model leftButton =
                         ++ "\" when you save"
                     )
             , currency =
-                getTextUnderInput Field.Currency
+                getTextUnderInput Transaction.Currency
                     (not (List.member transactionData.currency currencies))
                     ("\""
                         ++ transactionData.currency
@@ -503,10 +495,13 @@ viewTransactionForm dialogData model leftButton =
                         ++ " when you save"
                     )
             , price =
-                getTextUnderInput Field.Price
-                    (Dict.get transactionData.currency decimalsDict
-                        |> Maybe.withDefault Nat.nat0
-                        |> (\decimalsFromDict -> Nat.toInt decimalsFromDict < Nat.toInt newDecimals)
+                getTextUnderInput Transaction.Price
+                    (transactionData.currency
+                        /= ""
+                        && (Dict.get transactionData.currency decimalsDict
+                                |> Maybe.withDefault Nat.nat0
+                                |> (\decimalsFromDict -> Nat.toInt decimalsFromDict < Nat.toInt newDecimals)
+                           )
                     )
                     ("\""
                         ++ transactionData.currency
@@ -521,7 +516,7 @@ viewTransactionForm dialogData model leftButton =
         [ button [ c "closeButton", id closeButtonId, onClick ClosedDialog ]
             [ span [ class "visuallyHidden" ] [ text "Close" ]
             ]
-        , form [ c "container", novalidate True ]
+        , form [ c "container", novalidate True, onSubmit SaveClicked ]
             [ h2 [ c "title" ] [ text (getTitle model) ]
             , div [ c "checkBoxWrapper" ]
                 [ viewCheckbox
@@ -535,21 +530,21 @@ viewTransactionForm dialogData model leftButton =
                 ]
             , Input.view
                 { label = "Date"
-                , onInput = SetField Field.Date
-                , onBlur = Just (BluredFromField Field.Date)
+                , onInput = SetField Transaction.Date
+                , onBlur = Just (BluredFromField Transaction.Date)
                 , value = transactionData.date
                 , required = True
                 , id = "date"
                 , hasPlaceholder = False
                 , otherAttributes = [ type_ "date" ]
-                , textUnderInput = Input.Error (getError Field.Date)
+                , textUnderInput = Input.Error (getError Transaction.Date)
                 , dirty = dirtyRecord.date
                 , maybeDatalist = Nothing
                 }
             , Input.view
                 { label = "Category"
-                , onInput = SetField Field.Category
-                , onBlur = Just (BluredFromField Field.Category)
+                , onInput = SetField Transaction.Category
+                , onBlur = Just (BluredFromField Transaction.Category)
                 , value = transactionData.category
                 , required = True
                 , id = "category"
@@ -561,8 +556,8 @@ viewTransactionForm dialogData model leftButton =
                 }
             , Input.view
                 { label = "Name"
-                , onInput = SetField Field.Name
-                , onBlur = Just (BluredFromField Field.Name)
+                , onInput = SetField Transaction.Name
+                , onBlur = Just (BluredFromField Transaction.Name)
                 , value = transactionData.name
                 , required = True
                 , id = "name"
@@ -574,8 +569,8 @@ viewTransactionForm dialogData model leftButton =
                 }
             , Input.view
                 { label = "Price"
-                , onInput = SetField Field.Price
-                , onBlur = Just (BluredFromField Field.Price)
+                , onInput = SetField Transaction.Price
+                , onBlur = Just (BluredFromField Transaction.Price)
                 , value = transactionData.price
                 , required = True
                 , id = "price"
@@ -587,20 +582,20 @@ viewTransactionForm dialogData model leftButton =
                 }
             , Input.view
                 { label = "Amount"
-                , onInput = SetField Field.Amount
-                , onBlur = Just (BluredFromField Field.Amount)
+                , onInput = SetField Transaction.Amount
+                , onBlur = Just (BluredFromField Transaction.Amount)
                 , value = transactionData.amount
                 , required = False
                 , id = "amount"
                 , hasPlaceholder = False
                 , otherAttributes = []
-                , textUnderInput = Input.Error (getError Field.Amount)
+                , textUnderInput = Input.Error (getError Transaction.Amount)
                 , dirty = dirtyRecord.amount
                 , maybeDatalist = Nothing
                 }
             , Input.view
                 { label = "Description"
-                , onInput = SetField Field.Description
+                , onInput = SetField Transaction.Description
                 , onBlur = Nothing
                 , value = transactionData.description
                 , required = False
@@ -613,8 +608,8 @@ viewTransactionForm dialogData model leftButton =
                 }
             , Input.view
                 { label = "Currency"
-                , onInput = SetField Field.Currency
-                , onBlur = Just (BluredFromField Field.Currency)
+                , onInput = SetField Transaction.Currency
+                , onBlur = Just (BluredFromField Transaction.Currency)
                 , value = transactionData.currency
                 , required = True
                 , id = "currency"
@@ -624,14 +619,20 @@ viewTransactionForm dialogData model leftButton =
                 , dirty = dirtyRecord.currency
                 , maybeDatalist = Just currencies
                 }
-            , div [ c "fullPrice" ]
-                [ case TransactionUtils.getFullPrice transactionData decimalsDict of
-                    Ok fullPrice ->
-                        text fullPrice
+            , case getError Transaction.FullPrice of
+                Nothing ->
+                    div [ c "fullPrice" ]
+                        [ case Transaction.getFullPrice transactionData decimalsDict of
+                            Ok fullPrice ->
+                                text fullPrice
 
-                    Err _ ->
-                        text ""
-                ]
+                            -- dont show full price if Price and/or Amount fields are invalid
+                            Err _ ->
+                                text ""
+                        ]
+
+                Just errorText ->
+                    div [ c "fullPrice", c "fullPrice__error" ] [ text errorText ]
             , buttons
             , viewLastUpdated currentTimeZone transactionData.lastUpdated
             ]
@@ -645,15 +646,15 @@ viewTransactionForm dialogData model leftButton =
 type Msg
     = ClosedDialog
     | SetIsIncome Bool
-    | SetField Field.Field String
-    | BluredFromField Field.Field
+    | SetField Transaction.Field String
+    | BluredFromField Transaction.Field
+    | SaveClicked
     | GotTimeNowBeforeSave Posix
-    | GotTimeNowBeforeDelete Posix
     | Saved
+    | DeleteClicked
+    | GotTimeNowBeforeDelete Posix
     | DeleteExistingTransaction
     | NoOp
-    | BeforeSave
-    | BeforeDelete
     | GotTimeZone Time.Zone
 
 
@@ -672,41 +673,42 @@ toEscKey string =
             NoOp
 
 
-updateDialog : (DialogData -> DialogData) -> Dialog -> Store.SignedInStore -> Model
-updateDialog up dialog signedInStore =
-    Model signedInStore
-        (case dialog of
-            NewTransaction dialogData ->
-                NewTransaction (up dialogData)
+updateDialog : (DialogData -> DialogData) -> Model -> Model
+updateDialog up model =
+    { model
+        | dialog =
+            case model.dialog of
+                NewTransaction dialogData ->
+                    NewTransaction (up dialogData)
 
-            EditTransaction dialogData ->
-                EditTransaction (up dialogData)
+                EditTransaction dialogData ->
+                    EditTransaction (up dialogData)
 
-            InvalidTransaction dialogData ->
-                InvalidTransaction (up dialogData)
+                InvalidTransaction dialogData ->
+                    InvalidTransaction (up dialogData)
 
-            NoTransactionWithThisId ->
-                NoTransactionWithThisId
+                NoTransactionWithThisId ->
+                    NoTransactionWithThisId
 
-            TransactionIsDeleted ->
-                TransactionIsDeleted
-        )
+                TransactionIsDeleted ->
+                    TransactionIsDeleted
+    }
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     let
-        (Model signedInStore dialog) =
+        { signedInData, dialog } =
             model
 
-        store =
-            Store.signedInStoreToStore signedInStore
+        { transactions, cred } =
+            signedInData
 
-        transactions =
-            Store.transactions signedInStore
+        decimalsDict =
+            Transaction.getDecimalsDict transactions
 
         notDeletedTransactionDataList =
-            Transactions.getNotDeletedTransactionDataList transactions
+            Transaction.getNotDeletedTransactionDataList transactions
 
         updateTransactionForm : (Transaction.Data -> Transaction.Data) -> Maybe (DialogData -> DialogData) -> ( Model, Cmd Msg )
         updateTransactionForm transactionDataUpdate maybeDialogDataUpdate =
@@ -723,14 +725,17 @@ update msg model =
                         Just up ->
                             up newDialogData
                 )
-                dialog
-                signedInStore
+                model
             , Cmd.none
             )
 
         updateDirtyRecord : (DirtyRecord -> DirtyRecord) -> ( Model, Cmd Msg )
         updateDirtyRecord transform =
-            ( updateDialog (\dd -> { dd | dirtyRecord = transform dd.dirtyRecord }) dialog signedInStore, Cmd.none )
+            ( updateDialog
+                (\dd -> { dd | dirtyRecord = transform dd.dirtyRecord })
+                model
+            , Cmd.none
+            )
 
         updateGotTimeNow posixTime message =
             ( updateDialog
@@ -744,8 +749,7 @@ update msg model =
                     in
                     { dd | transactionData = newTransactionData }
                 )
-                dialog
-                signedInStore
+                model
             , Task.perform
                 (\_ -> message)
                 (Task.succeed message)
@@ -754,37 +758,33 @@ update msg model =
         pushUrlBack =
             case dialog of
                 InvalidTransaction _ ->
-                    Route.pushUrl (Store.navKey store) Route.CSV
+                    Route.pushUrl model.store.navKey Route.CSV
 
                 _ ->
-                    Route.pushUrl (Store.navKey store) Route.TransactionList
+                    Route.pushUrl model.store.navKey Route.TransactionList
 
         saveTransactionData transactionData =
-            case Transaction.getTransaction transactionData of
+            case Transaction.getTransaction decimalsDict transactionData of
                 Just transaction ->
                     let
                         { password, username } =
-                            Cred.credToCredData (Store.cred signedInStore)
+                            Cred.credToCredData cred
 
                         newTransactions =
-                            TransactionUtils.insertTransaction
-                                (Store.transactions signedInStore)
+                            Transaction.insertTransaction
+                                model.signedInData.transactions
                                 transaction
 
-                        newSignedInStore =
-                            Store.updateSignedInData
-                                (\signedInData ->
-                                    { signedInData
-                                        | transactions = newTransactions
-                                    }
-                                )
-                                signedInStore
+                        newSignedInData =
+                            { signedInData
+                                | transactions = newTransactions
+                            }
                     in
-                    ( Model newSignedInStore dialog
+                    ( { model | signedInData = newSignedInData }
                     , Cmd.batch
                         [ pushUrlBack
                         , Port.updatedTransactions
-                            (Transactions.toJsonValue newTransactions)
+                            (Transaction.toJsonValue newTransactions)
                             password
                             username
                         ]
@@ -800,13 +800,17 @@ update msg model =
                 (\dd ->
                     { dd | currentTimeZone = Just zone }
                 )
-                dialog
-                signedInStore
+                model
             , Cmd.none
             )
 
         ClosedDialog ->
-            ( model, pushUrlBack )
+            case dialog of
+                InvalidTransaction _ ->
+                    ( { model | signedInData = { signedInData | invalidTransactionData = [] } }, pushUrlBack )
+
+                _ ->
+                    ( model, pushUrlBack )
 
         SetIsIncome bool ->
             updateTransactionForm (\val -> { val | isIncome = bool })
@@ -827,10 +831,10 @@ update msg model =
 
         SetField field str ->
             case field of
-                Field.Date ->
+                Transaction.Date ->
                     updateTransactionForm (\val -> { val | date = str }) Nothing
 
-                Field.Category ->
+                Transaction.Category ->
                     updateTransactionForm (\val -> { val | category = str })
                         (Just
                             (\dd ->
@@ -847,19 +851,19 @@ update msg model =
                             )
                         )
 
-                Field.Name ->
+                Transaction.Name ->
                     updateTransactionForm (\val -> { val | name = str }) Nothing
 
-                Field.Price ->
+                Transaction.Price ->
                     updateTransactionForm (\val -> { val | price = str }) Nothing
 
-                Field.Amount ->
+                Transaction.Amount ->
                     updateTransactionForm (\val -> { val | amount = str }) Nothing
 
-                Field.Description ->
+                Transaction.Description ->
                     updateTransactionForm (\val -> { val | description = str }) Nothing
 
-                Field.Currency ->
+                Transaction.Currency ->
                     updateTransactionForm (\val -> { val | currency = str })
                         (Just
                             (\dd ->
@@ -869,24 +873,27 @@ update msg model =
                             )
                         )
 
+                Transaction.FullPrice ->
+                    ( model, Cmd.none )
+
         BluredFromField field ->
             case field of
-                Field.Date ->
+                Transaction.Date ->
                     updateDirtyRecord (\val -> { val | date = True })
 
-                Field.Category ->
+                Transaction.Category ->
                     updateDirtyRecord (\val -> { val | category = True })
 
-                Field.Name ->
+                Transaction.Name ->
                     updateDirtyRecord (\val -> { val | name = True })
 
-                Field.Price ->
+                Transaction.Price ->
                     updateDirtyRecord (\val -> { val | price = True })
 
-                Field.Amount ->
+                Transaction.Amount ->
                     updateDirtyRecord (\val -> { val | amount = True })
 
-                Field.Currency ->
+                Transaction.Currency ->
                     updateDirtyRecord (\val -> { val | currency = True })
 
                 _ ->
@@ -901,7 +908,7 @@ update msg model =
         GotTimeNowBeforeDelete posixTime ->
             updateGotTimeNow posixTime DeleteExistingTransaction
 
-        BeforeSave ->
+        SaveClicked ->
             ( updateDialog
                 (\dd ->
                     { dd
@@ -916,12 +923,11 @@ update msg model =
                             }
                     }
                 )
-                dialog
-                signedInStore
+                model
             , getTime GotTimeNowBeforeSave
             )
 
-        BeforeDelete ->
+        DeleteClicked ->
             ( model, getTime GotTimeNowBeforeDelete )
 
         Saved ->

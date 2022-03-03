@@ -32,24 +32,24 @@ type Model
 initialModel : Maybe UuidSeed -> Flags -> Url -> Nav.Key -> ( Model, Cmd Msg )
 initialModel maybeSeed { seedAndExtension } url key =
     let
-        signedOutStore =
-            Store.initStore
-                { navKey = key
-                , url = url
-                , uuidSeed =
-                    Maybe.withDefault
-                        (UuidSeed.init seedAndExtension)
-                        maybeSeed
-                }
+        store =
+            { navKey = key
+            , url = url
+            , uuidSeed =
+                Maybe.withDefault
+                    (UuidSeed.init seedAndExtension)
+                    maybeSeed
+            , signedInData = Nothing
+            }
     in
     case Route.fromUrl url of
         Nothing ->
-            ( NotFound (Store.signedOutStoreToStore signedOutStore), Cmd.none )
+            ( NotFound store, Cmd.none )
 
         Just _ ->
             let
                 ( signInModel, signInCommand ) =
-                    SignIn.init signedOutStore
+                    SignIn.init store
             in
             ( SignIn signInModel
             , Cmd.map GotSignInMsg signInCommand
@@ -133,20 +133,14 @@ getStore model =
             CSV.getStore csvModel
 
 
-changeRouteTo : Maybe Route -> Store -> Model -> ( Model, Cmd Msg )
-changeRouteTo maybeRoute store model =
-    case Store.getSignedInStore store of
+changeRouteTo : Maybe Route -> Store -> ( Model, Cmd Msg )
+changeRouteTo maybeRoute store =
+    case store.signedInData of
         Nothing ->
-            case Store.getSignedOutStore store of
-                Just signedOutStore ->
-                    SignIn.init signedOutStore
-                        |> updatePageWith SignIn GotSignInMsg
+            SignIn.init store
+                |> updatePageWith SignIn GotSignInMsg
 
-                -- Nothing branch will never happen
-                Nothing ->
-                    ( model, Cmd.none )
-
-        Just signedInStore ->
+        Just signedInData ->
             case maybeRoute of
                 Nothing ->
                     ( NotFound store, Cmd.none )
@@ -154,40 +148,48 @@ changeRouteTo maybeRoute store model =
                 Just Route.TransactionList ->
                     TransactionList.init
                         TransactionList.NoDialog
-                        signedInStore
+                        store
+                        signedInData
                         |> updatePageWith TransactionList GotTransactionListMsg
 
                 Just Route.TransactionNew ->
                     TransactionList.init
                         TransactionList.New
-                        signedInStore
+                        store
+                        signedInData
                         |> updatePageWith TransactionList GotTransactionListMsg
 
                 Just (Route.Transaction id) ->
                     TransactionList.init
                         (TransactionList.Edit (Prng.Uuid.toString id))
-                        signedInStore
+                        store
+                        signedInData
                         |> updatePageWith TransactionList GotTransactionListMsg
 
                 Just Route.CSV ->
-                    CSV.init signedInStore
+                    CSV.init store signedInData
                         |> updatePageWith CSV GotCSVMsg
 
                 Just Route.LogOut ->
                     let
-                        navKey =
-                            Store.navKey store
-
                         ( m, cmd ) =
                             initialModel
-                                (Just (Store.uuidSeed store))
-                                -- seed and extension  ( 0, [ 0 ] ) is not actually used because Just above
+                                (Just store.uuidSeed)
+                                -- seed and extension  ( 0, [ 0 ] ) is not
+                                -- actually used because Just above
                                 -- but it is needed to typecheck
                                 { seedAndExtension = ( 0, [ 0 ] ) }
-                                (Store.url store)
-                                navKey
+                                store.url
+                                store.navKey
                     in
-                    ( m, Cmd.batch [ cmd, Route.pushUrl navKey Route.TransactionList ] )
+                    ( m
+                    , Cmd.batch
+                        [ cmd
+                        , Route.pushUrl
+                            store.navKey
+                            Route.TransactionList
+                        ]
+                    )
 
 
 updatePageWith : (subModel -> Model) -> (subMsg -> Msg) -> ( subModel, Cmd subMsg ) -> ( Model, Cmd Msg )
@@ -207,7 +209,7 @@ update message model =
         ( ClickedLink urlRequest, _ ) ->
             case urlRequest of
                 Browser.Internal url ->
-                    ( model, Nav.pushUrl (Store.navKey store) (Url.toString url) )
+                    ( model, Nav.pushUrl store.navKey (Url.toString url) )
 
                 Browser.External href ->
                     ( model, Nav.load href )
@@ -215,20 +217,11 @@ update message model =
         ( ChangedUrl url, _ ) ->
             changeRouteTo
                 (Route.fromUrl url)
-                (Store.updateAlwaysInStore (\s -> { s | url = url }) store)
-                model
+                { store | url = url }
 
         ( GotSignInMsg subMsg, SignIn signInModel ) ->
-            case subMsg of
-                SignIn.SignInSuccess signedInStore ->
-                    changeRouteTo
-                        (Route.fromUrl (Store.url store))
-                        (Store.signedInStoreToStore signedInStore)
-                        model
-
-                _ ->
-                    SignIn.update subMsg signInModel
-                        |> updatePageWith SignIn GotSignInMsg
+            SignIn.update subMsg signInModel
+                |> updatePageWith SignIn GotSignInMsg
 
         ( GotTransactionListMsg subMsg, TransactionList transactionListModel ) ->
             TransactionList.update subMsg transactionListModel
@@ -259,10 +252,10 @@ subscriptions model =
                     Sub.map GotSignInMsg SignIn.subscriptions
 
                 TransactionList _ ->
-                    Sub.none
+                    Sub.map GotTransactionListMsg TransactionList.subscriptions
 
                 CSV _ ->
-                    Sub.none
+                    Sub.map GotCSVMsg CSV.subscriptions
     in
     pageSubs
 
