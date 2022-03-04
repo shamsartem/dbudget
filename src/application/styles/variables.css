@@ -5,8 +5,8 @@
   /* Colors */
 
   /* gray */
-  --h-gray: 200;
-  --s-gray: 10%;
+  --h-gray: 180;
+  --s-gray: 15%;
   --l-gray-1: 10%;
   --l-gray-2: 20%;
   --l-gray-3: 30%;
@@ -16,6 +16,18 @@
   --l-gray-7: 70%;
   --l-gray-8: 80%;
   --l-gray-9: 90%;
+  @media (prefers-color-scheme: light) {
+    --l-gray-1: 100%;
+    --l-gray-2: 85%;
+    --l-gray-3: 75%;
+    --l-gray-4: 60%;
+    --l-gray-5: 30%;
+    --l-gray-6: 25%;
+    --l-gray-7: 20%;
+    --l-gray-8: 15%;
+    --l-gray-9: 10%;
+  }
+
   --c-gray-1: hsl(var(--h-gray), var(--s-gray), var(--l-gray-1));
   --c-gray-1-8: hsl(var(--h-gray), var(--s-gray), var(--l-gray-1), 80%);
   --c-gray-2: hsl(var(--h-gray), var(--s-gray), var(--l-gray-2));
@@ -33,6 +45,12 @@
   --l-info-dark: 30%;
   --l-info: 60%;
   --l-info-light: 90%;
+  @media (prefers-color-scheme: light) {
+    --l-info-dark: 80%;
+    --l-info: 50%;
+    --l-info-light: 30%;
+  }
+
   --c-info-dark: hsl(var(--h-info), var(--s-info), var(--l-info-dark));
   --c-info: hsl(var(--h-info), var(--s-info), var(--l-info));
   --c-info-light:
@@ -48,6 +66,12 @@
   --l-warning-dark: 30%;
   --l-warning: 60%;
   --l-warning-light: 90%;
+  @media (prefers-color-scheme: light) {
+    --l-warning-dark: 60%;
+    --l-warning: 30%;
+    --l-warning-light: 30%;
+  }
+
   --c-warning-dark:
     hsl(
       var(--h-warning),
@@ -73,6 +97,12 @@
   --l-danger-dark: 30%;
   --l-danger: 50%;
   --l-danger-light: 70%;
+  @media (prefers-color-scheme: light) {
+    --l-danger-dark: 70%;
+    --l-danger: 40%;
+    --l-danger-light: 30%;
+  }
+
   --c-danger-dark:
     hsl(
       var(--h-danger),

@@ -1,4 +1,9 @@
-port module Port exposing (SentToElm, handleSignIn, sendToElm, updatedTransactions)
+port module Port exposing
+    ( SentToElm
+    , handleSignIn
+    , receiveString
+    , updatedTransactions
+    )
 
 import Json.Encode as Encode
 
@@ -11,7 +16,7 @@ type alias SentToElm =
     }
 
 
-port sendToElm : (String -> msg) -> Sub msg
+port receiveString : (String -> msg) -> Sub msg
 
 
 type SendMsg

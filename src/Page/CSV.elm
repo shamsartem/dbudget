@@ -25,6 +25,7 @@ import Task
 import Time exposing (Posix)
 import Transaction
 import View.Header as Header exposing (viewHeader)
+import View.Loader as Loader
 
 
 type DialogModel
@@ -139,7 +140,7 @@ view model =
                     ]
 
                 ParsingCsv ->
-                    [ text "Parsing..." ]
+                    [ Loader.view (Just "Parsing...") ]
 
                 ParsedCsv ->
                     [ text "Succecssfully parsed CSV"
@@ -244,7 +245,7 @@ update msg model =
                 { password, username } =
                     Cred.credToCredData signedInData.cred
 
-                ( transactionsDict, invalidTransactionData, newUuidSeed ) =
+                { transactionsDict, invalidTransactionData, newUuidSeed } =
                     Transaction.listOfRowsToTransactionsDict
                         store.uuidSeed
                         timeNow

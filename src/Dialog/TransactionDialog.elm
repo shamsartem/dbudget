@@ -54,6 +54,8 @@ type alias DialogData =
     , dirtyRecord : DirtyRecord
     , isButtonsDisabled : Bool
     , currentTimeZone : Maybe Time.Zone
+    , filteredBasedOnIsIncome : List Transaction.Data
+    , filteredByCategory : List Transaction.Data
     , categories : List String
     , names : List String
     , currencies : List String
@@ -109,6 +111,25 @@ getTitle { dialog } =
             "Transaction is deleted"
 
 
+getDialogDataField : (DialogData -> a) -> Dialog -> Maybe a
+getDialogDataField extractor dialog =
+    case dialog of
+        InvalidTransaction dialogData ->
+            Just (extractor dialogData)
+
+        NewTransaction dialogData ->
+            Just (extractor dialogData)
+
+        EditTransaction dialogData ->
+            Just (extractor dialogData)
+
+        NoTransactionWithThisId ->
+            Nothing
+
+        TransactionIsDeleted ->
+            Nothing
+
+
 dialogId : String
 dialogId =
     "transactionDialog"
@@ -157,39 +178,45 @@ sortByPopularity transactions =
         |> List.map (\( key, _ ) -> key)
 
 
-signedInStoreToFilteredTransactionData : List Transaction.Data -> Bool -> List Transaction.Data
-signedInStoreToFilteredTransactionData notDeletedTransactionDataList isIncome =
+getFilteredBasedOnIsIncome : List Transaction.Data -> Transaction.Data -> List Transaction.Data
+getFilteredBasedOnIsIncome notDeletedTransactionDataList { isIncome } =
     List.filter
         (\transaction -> transaction.isIncome == isIncome)
         notDeletedTransactionDataList
 
 
-getStringsContainingField : (Transaction.Data -> String) -> String -> List Transaction.Data -> List String
-getStringsContainingField getValue contains filteredTransactionData =
+getFilteredByCategory : List Transaction.Data -> Transaction.Data -> List Transaction.Data
+getFilteredByCategory filteredBasedOnIsIncome { category } =
+    filteredBasedOnIsIncome
+        |> List.filter (\t -> t.category == category)
+
+
+getStringsContainingField : (Transaction.Data -> String) -> List Transaction.Data -> List String
+getStringsContainingField getValue filteredTransactionData =
     filteredTransactionData
         |> List.map (\transaction -> getValue transaction)
         |> sortByPopularity
-        |> List.filter (\str -> String.contains contains str)
 
 
 getCategories : List Transaction.Data -> Transaction.Data -> List String
 getCategories filteredBasedOnIsIncome { category } =
     filteredBasedOnIsIncome
         |> List.filter (\t -> String.contains category t.category)
-        |> getStringsContainingField .category category
+        |> getStringsContainingField .category
 
 
 getNames : List Transaction.Data -> Transaction.Data -> List String
-getNames filteredBasedOnIsIncome { category, name } =
-    filteredBasedOnIsIncome
-        |> List.filter (\t -> t.category == category)
-        |> getStringsContainingField .name name
+getNames filteredByCategory { name } =
+    filteredByCategory
+        |> List.filter (\t -> String.contains name t.name)
+        |> getStringsContainingField .name
 
 
 getCurrencies : List Transaction.Data -> Transaction.Data -> List String
 getCurrencies notDeletedTransactionDataList { currency } =
     notDeletedTransactionDataList
-        |> getStringsContainingField .currency currency
+        |> List.filter (\t -> t.currency == currency)
+        |> getStringsContainingField .currency
 
 
 init : InitType -> Store -> Store.SignedInData -> ( Model, Cmd Msg )
@@ -201,15 +228,21 @@ init initType store signedInData =
         transactionsDict =
             Transaction.getTransactionsDict transactions
 
+        getDialogData : Bool -> Transaction.Data -> DialogData
         getDialogData isDirty transactionData =
             let
                 notDeletedTransactionDataList =
                     Transaction.getNotDeletedTransactionDataList transactions
 
                 filteredBasedOnIsIncome =
-                    signedInStoreToFilteredTransactionData
+                    getFilteredBasedOnIsIncome
                         notDeletedTransactionDataList
-                        transactionData.isIncome
+                        transactionData
+
+                filteredByCategory =
+                    getFilteredByCategory
+                        filteredBasedOnIsIncome
+                        transactionData
             in
             { transactionData = transactionData
             , dirtyRecord =
@@ -223,8 +256,10 @@ init initType store signedInData =
                 }
             , isButtonsDisabled = False
             , currentTimeZone = Nothing
+            , filteredBasedOnIsIncome = filteredBasedOnIsIncome
+            , filteredByCategory = filteredByCategory
             , categories = getCategories filteredBasedOnIsIncome transactionData
-            , names = getNames filteredBasedOnIsIncome transactionData
+            , names = getNames filteredByCategory transactionData
             , currencies = getCurrencies notDeletedTransactionDataList transactionData
             }
 
@@ -822,13 +857,19 @@ update msg model =
                     (\dd ->
                         let
                             filteredBasedOnIsIncome =
-                                signedInStoreToFilteredTransactionData
+                                getFilteredBasedOnIsIncome
                                     notDeletedTransactionDataList
-                                    dd.transactionData.isIncome
+                                    dd.transactionData
+
+                            filteredByCategory =
+                                getFilteredByCategory
+                                    filteredBasedOnIsIncome
+                                    dd.transactionData
                         in
                         { dd
-                            | categories = getCategories filteredBasedOnIsIncome dd.transactionData
-                            , names = getNames filteredBasedOnIsIncome dd.transactionData
+                            | filteredByCategory = filteredByCategory
+                            , categories = getCategories filteredBasedOnIsIncome dd.transactionData
+                            , names = getNames filteredByCategory dd.transactionData
                         }
                     )
                 )
@@ -840,23 +881,44 @@ update msg model =
 
                 Transaction.Category ->
                     updateTransactionForm (\val -> { val | category = str })
-                        (Just
-                            (\dd ->
-                                let
-                                    filteredBasedOnIsIncome =
-                                        signedInStoreToFilteredTransactionData
-                                            notDeletedTransactionDataList
-                                            dd.transactionData.isIncome
-                                in
-                                { dd
-                                    | categories = getCategories filteredBasedOnIsIncome dd.transactionData
-                                    , names = getNames filteredBasedOnIsIncome dd.transactionData
-                                }
-                            )
+                        (getDialogDataField .filteredBasedOnIsIncome dialog
+                            |> Maybe.map
+                                (\filteredBasedOnIsIncome ->
+                                    \dd ->
+                                        let
+                                            filteredByCategory =
+                                                getFilteredByCategory
+                                                    filteredBasedOnIsIncome
+                                                    dd.transactionData
+                                        in
+                                        { dd
+                                            | filteredByCategory = filteredByCategory
+                                            , categories =
+                                                getCategories
+                                                    filteredBasedOnIsIncome
+                                                    dd.transactionData
+                                            , names =
+                                                getNames
+                                                    filteredByCategory
+                                                    dd.transactionData
+                                        }
+                                )
                         )
 
                 Transaction.Name ->
-                    updateTransactionForm (\val -> { val | name = str }) Nothing
+                    updateTransactionForm (\val -> { val | name = str })
+                        (getDialogDataField .filteredByCategory dialog
+                            |> Maybe.map
+                                (\filteredByCategory ->
+                                    \dd ->
+                                        { dd
+                                            | names =
+                                                getNames
+                                                    filteredByCategory
+                                                    dd.transactionData
+                                        }
+                                )
+                        )
 
                 Transaction.Price ->
                     updateTransactionForm (\val -> { val | price = str }) Nothing

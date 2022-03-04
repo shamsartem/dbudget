@@ -12,6 +12,7 @@ import Transaction
 import Url
 import Validate exposing (Validator, ifBlank, validate)
 import View.Input as Input
+import View.Loader as Loader
 
 
 type alias DirtyRecord =
@@ -147,7 +148,7 @@ view model =
                 text ""
 
             SignedInAndLoading _ ->
-                div [ c "state" ] [ text "Loading..." ]
+                div [ c "state" ] [ Loader.view Nothing ]
 
             WrongPassword ->
                 div [ c "state", c "state__wrongPassword" ] [ text "Wrong password" ]
@@ -276,7 +277,7 @@ update msg model =
                                     let
                                         -- ignore invalid because there should
                                         -- should only be valid in local storage
-                                        ( transactionsDict, _, _ ) =
+                                        { transactionsDict } =
                                             Transaction.stringToTransactionDict
                                                 store.uuidSeed
                                                 m
@@ -331,4 +332,4 @@ update msg model =
 
 subscriptions : Sub Msg
 subscriptions =
-    Port.sendToElm SentToElm
+    Port.receiveString SentToElm

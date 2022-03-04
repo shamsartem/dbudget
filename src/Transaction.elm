@@ -442,41 +442,46 @@ transactionsToDecimals : TransactionsDict -> DecimalsDict
 transactionsToDecimals transactionsDict =
     Dict.foldl
         (\_ transaction decimals ->
-            let
-                { price, currency, isDeleted } =
-                    getTransactionData transaction
-            in
-            if isDeleted then
-                decimals
-
-            else
-                stringToDecimal price Nat.nat0 0
-                    |> Result.map
-                        (\decimal ->
-                            Dict.update
-                                currency
-                                (\maybePrevPrecision ->
-                                    let
-                                        prevPrecision =
-                                            Maybe.withDefault Nat.nat0 maybePrevPrecision
-
-                                        currentPrecision =
-                                            decimal |> Decimal.getPrecision
-                                    in
-                                    Just
-                                        (if Nat.toInt currentPrecision > Nat.toInt prevPrecision then
-                                            currentPrecision
-
-                                         else
-                                            prevPrecision
-                                        )
-                                )
-                                decimals
-                        )
-                    |> Result.withDefault decimals
+            updateDecimalsDict (getTransactionData transaction) decimals
         )
         Dict.empty
         transactionsDict
+
+
+updateDecimalsDict : Data -> DecimalsDict -> DecimalsDict
+updateDecimalsDict transactionData decimals =
+    let
+        { price, currency, isDeleted } =
+            transactionData
+    in
+    if isDeleted then
+        decimals
+
+    else
+        stringToDecimal price Nat.nat0 0
+            |> Result.map
+                (\decimal ->
+                    Dict.update
+                        currency
+                        (\maybePrevPrecision ->
+                            let
+                                prevPrecision =
+                                    Maybe.withDefault Nat.nat0 maybePrevPrecision
+
+                                currentPrecision =
+                                    decimal |> Decimal.getPrecision
+                            in
+                            Just
+                                (if Nat.toInt currentPrecision > Nat.toInt prevPrecision then
+                                    currentPrecision
+
+                                 else
+                                    prevPrecision
+                                )
+                        )
+                        decimals
+                )
+            |> Result.withDefault decimals
 
 
 toListOfListsOfStrings : TransactionsDict -> List (List String)
@@ -522,11 +527,16 @@ listOfRowsToTransactionsDict :
     UuidSeed
     -> Posix
     -> List (Array String)
-    -> ( TransactionsDict, List Data, UuidSeed )
+    ->
+        { transactionsDict : TransactionsDict
+        , invalidTransactionData : List Data
+        , newUuidSeed : UuidSeed
+        , decimalsDict : DecimalsDict
+        }
 listOfRowsToTransactionsDict uuidSeed timeNow listOfRows =
     listOfRows
         |> List.foldl
-            (\valueArray ( transactionsDict, transactionValueList, currentUuidSeed ) ->
+            (\valueArray { transactionsDict, invalidTransactionData, newUuidSeed, decimalsDict } ->
                 let
                     maybeId =
                         Array.get 8 valueArray
@@ -535,10 +545,10 @@ listOfRowsToTransactionsDict uuidSeed timeNow listOfRows =
                     ( id, seed ) =
                         case maybeId of
                             Nothing ->
-                                UuidSeed.getNewUuid currentUuidSeed
+                                UuidSeed.getNewUuid newUuidSeed
 
                             Just uuid ->
-                                ( uuid, currentUuidSeed )
+                                ( uuid, newUuidSeed )
 
                     defaultTransactionValueWithoutTime =
                         getDefaultTransactionValue id
@@ -613,26 +623,33 @@ listOfRowsToTransactionsDict uuidSeed timeNow listOfRows =
                     idString =
                         Prng.Uuid.toString transactionData.id
 
-                    decimalsDict =
-                        getDecimalsDict (getTransactions transactionsDict)
+                    newDecimalsDict =
+                        updateDecimalsDict transactionData decimalsDict
                 in
                 case getTransaction decimalsDict transactionData of
                     Just transaction ->
-                        ( Dict.insert
-                            idString
-                            transaction
-                            transactionsDict
-                        , transactionValueList
-                        , seed
-                        )
+                        { transactionsDict =
+                            Dict.insert
+                                idString
+                                transaction
+                                transactionsDict
+                        , invalidTransactionData = invalidTransactionData
+                        , newUuidSeed = seed
+                        , decimalsDict = newDecimalsDict
+                        }
 
                     Nothing ->
-                        ( transactionsDict
-                        , transactionData :: transactionValueList
-                        , seed
-                        )
+                        { transactionsDict = transactionsDict
+                        , invalidTransactionData = transactionData :: invalidTransactionData
+                        , newUuidSeed = seed
+                        , decimalsDict = decimalsDict
+                        }
             )
-            ( Dict.empty, [], uuidSeed )
+            { transactionsDict = Dict.empty
+            , invalidTransactionData = []
+            , newUuidSeed = uuidSeed
+            , decimalsDict = Dict.empty
+            }
 
 
 type alias TransactionsFromJs =
@@ -646,7 +663,12 @@ type alias TransactionsFromJs =
 stringToTransactionDict :
     UuidSeed
     -> String
-    -> ( TransactionsDict, List Data, UuidSeed )
+    ->
+        { transactionsDict : TransactionsDict
+        , invalidTransactionData : List Data
+        , newUuidSeed : UuidSeed
+        , decimalsDict : DecimalsDict
+        }
 stringToTransactionDict uuidSeed string =
     case
         Decode.decodeString
@@ -662,7 +684,11 @@ stringToTransactionDict uuidSeed string =
                 payload
 
         Err _ ->
-            ( Dict.empty, [], uuidSeed )
+            { transactionsDict = Dict.empty
+            , invalidTransactionData = []
+            , newUuidSeed = uuidSeed
+            , decimalsDict = Dict.empty
+            }
 
 
 

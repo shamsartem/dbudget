@@ -46,7 +46,9 @@ type DialogModel
 
 type alias Model =
     { dialogModel : DialogModel
+    , allTransactions : List DisplayedTransaction
     , search : String
+    , filteredAndSortedTransactions : List DisplayedTransaction
     , infList : InfiniteList.Model
     }
 
@@ -69,16 +71,6 @@ getStore model =
 
         DialogModel m ->
             Store.getStore m
-
-
-getSignedInData : Model -> Store.SignedInData
-getSignedInData model =
-    case model.dialogModel of
-        WithoutDialog { signedInData } ->
-            signedInData
-
-        DialogModel m ->
-            TransactionDialog.getSignedInData m
 
 
 type ListItem
@@ -179,6 +171,13 @@ sortTransactions list =
             )
 
 
+filterAndSortTransactions : List DisplayedTransaction -> String -> List DisplayedTransaction
+filterAndSortTransactions allTransactions search =
+    allTransactions
+        |> filterDisplayedTransactions search
+        |> sortTransactions
+
+
 itemHeight : Int
 itemHeight =
     70
@@ -186,7 +185,7 @@ itemHeight =
 
 containerHeight : Int
 containerHeight =
-    2160
+    1080
 
 
 config : InfiniteList.Config ListItem Msg
@@ -220,31 +219,19 @@ getMessageView availableTransactionsToDisplay sortedTransactions =
 
 
 viewTransactions : Model -> List (Html Msg)
-viewTransactions model =
-    let
-        availableTransactionsToDisplay =
-            model
-                |> getSignedInData
-                |> .transactions
-                |> transactionsToDisplayedTransactions
-
-        sortedTransactions =
-            availableTransactionsToDisplay
-                |> filterDisplayedTransactions model.search
-                |> sortTransactions
-    in
+viewTransactions { allTransactions, search, filteredAndSortedTransactions, infList } =
     [ div
         [ c "infList", InfiniteList.onScroll InfListMsg ]
         [ InfiniteList.view
             config
-            model.infList
-            (Header model.search
-                :: (sortedTransactions
+            infList
+            (Header search
+                :: (filteredAndSortedTransactions
                         |> List.map Row
                    )
             )
         ]
-    , getMessageView availableTransactionsToDisplay sortedTransactions
+    , getMessageView allTransactions filteredAndSortedTransactions
     ]
 
 
@@ -283,8 +270,13 @@ init initType store signedInData =
                         }
                     , Nothing
                     )
+
+        allTransactions =
+            transactionsToDisplayedTransactions signedInData.transactions
     in
     ( { dialogModel = transactionDialogModel
+      , allTransactions = allTransactions
+      , filteredAndSortedTransactions = filterAndSortTransactions allTransactions ""
       , search = ""
       , infList = InfiniteList.init
       }
@@ -343,7 +335,15 @@ transactionItemView { date, category, name, price, id, isIncome } =
         , a [ Route.href (Route.Transaction id), c "itemLink" ]
             [ div
                 [ class "visuallyHidden" ]
-                [ text (name ++ price ++ date ++ category) ]
+                [ text
+                    (String.join " "
+                        [ name
+                        , price
+                        , date
+                        , category
+                        ]
+                    )
+                ]
             ]
         ]
 
@@ -396,8 +396,16 @@ type Msg
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
-        SearchInput str ->
-            ( { model | search = str }, Cmd.none )
+        SearchInput search ->
+            ( { model
+                | search = search
+                , filteredAndSortedTransactions =
+                    filterAndSortTransactions
+                        model.allTransactions
+                        search
+              }
+            , Cmd.none
+            )
 
         InfListMsg infList ->
             ( { model | infList = infList }, Cmd.none )
