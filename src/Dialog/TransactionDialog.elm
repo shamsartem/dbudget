@@ -199,32 +199,45 @@ getFilteredByCategory filteredBasedOnIsIncome { category } =
         |> List.filter (\t -> t.category == category)
 
 
-getStringsContainingField : (Transaction.Data -> String) -> List Transaction.Data -> List String
-getStringsContainingField getValue filteredTransactionData =
+getStringsContainingField :
+    (Transaction.Data -> String)
+    -> Transaction.Data
+    -> List Transaction.Data
+    -> List String
+getStringsContainingField getValue currentTransactionData filteredTransactionData =
     filteredTransactionData
+        |> List.filter
+            (\transactionData ->
+                String.contains
+                    (currentTransactionData |> getValue |> String.toLower)
+                    (transactionData |> getValue |> String.toLower)
+            )
         |> List.map (\transaction -> getValue transaction)
         |> sortByPopularity
 
 
 getCategories : List Transaction.Data -> Transaction.Data -> List String
-getCategories filteredBasedOnIsIncome { category } =
-    filteredBasedOnIsIncome
-        |> List.filter (\t -> String.contains category t.category)
-        |> getStringsContainingField .category
+getCategories filteredBasedOnIsIncome transactionData =
+    getStringsContainingField
+        .category
+        transactionData
+        filteredBasedOnIsIncome
 
 
 getNames : List Transaction.Data -> Transaction.Data -> List String
-getNames filteredByCategory { name } =
-    filteredByCategory
-        |> List.filter (\t -> String.contains name t.name)
-        |> getStringsContainingField .name
+getNames filteredByCategory transactionData =
+    getStringsContainingField
+        .name
+        transactionData
+        filteredByCategory
 
 
 getCurrencies : List Transaction.Data -> Transaction.Data -> List String
-getCurrencies notDeletedTransactionDataList { currency } =
-    notDeletedTransactionDataList
-        |> List.filter (\t -> t.currency == currency)
-        |> getStringsContainingField .currency
+getCurrencies notDeletedTransactionDataList transactionData =
+    getStringsContainingField
+        .currency
+        transactionData
+        notDeletedTransactionDataList
 
 
 init : InitType -> Store -> Store.SignedInData -> ( Model, Cmd Msg )
@@ -1132,10 +1145,26 @@ update msg model =
                     ( model, Cmd.none )
 
         ConfirmedSave transactionData ->
+            let
+                getTrimmed get =
+                    transactionData |> get |> String.trim
+
+                trimmedTransactionData : Transaction.Data
+                trimmedTransactionData =
+                    { transactionData
+                        | date = getTrimmed .date
+                        , category = getTrimmed .category
+                        , name = getTrimmed .name
+                        , price = getTrimmed .price
+                        , amount = getTrimmed .amount
+                        , description = getTrimmed .description
+                        , currency = getTrimmed .currency
+                    }
+            in
             ( updateDialog
                 (\dd -> { dd | isButtonsDisabled = True })
                 model
-            , getTime (GotTimeNowBeforeSave transactionData)
+            , getTime (GotTimeNowBeforeSave trimmedTransactionData)
             )
 
         DeleteClicked ->

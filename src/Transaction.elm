@@ -535,122 +535,124 @@ listOfRowsToTransactionsDict :
         , decimalsDict : DecimalsDict
         }
 listOfRowsToTransactionsDict uuidSeed timeNow listOfRows =
-    listOfRows
-        |> List.foldl
-            (\valueArray { transactionsDict, invalidTransactionData, newUuidSeed, decimalsDict } ->
-                let
-                    maybeId =
-                        Array.get 8 valueArray
-                            |> Maybe.andThen (\stringId -> Prng.Uuid.fromString stringId)
+    List.foldl
+        (\valueArray { transactionsDict, invalidTransactionData, newUuidSeed, decimalsDict } ->
+            let
+                maybeId =
+                    Array.get 8 valueArray
+                        |> Maybe.andThen (\stringId -> Prng.Uuid.fromString stringId)
 
-                    ( id, seed ) =
-                        case maybeId of
-                            Nothing ->
-                                UuidSeed.getNewUuid newUuidSeed
+                ( id, seed ) =
+                    case maybeId of
+                        Nothing ->
+                            UuidSeed.getNewUuid newUuidSeed
 
-                            Just uuid ->
-                                ( uuid, newUuidSeed )
+                        Just uuid ->
+                            ( uuid, newUuidSeed )
 
-                    defaultTransactionValueWithoutTime =
-                        getDefaultTransactionValue id
+                defaultTransactionValueWithoutTime =
+                    getDefaultTransactionValue id
 
-                    defaultTransactionValue =
-                        { defaultTransactionValueWithoutTime | lastUpdated = timeNow }
+                defaultTransactionValue =
+                    { defaultTransactionValueWithoutTime | lastUpdated = timeNow }
 
-                    getBoolWithdefault index defaultFn =
-                        case Array.get index valueArray of
-                            Nothing ->
-                                defaultFn defaultTransactionValue
+                getBoolWithdefault index defaultFn =
+                    case Array.get index valueArray of
+                        Nothing ->
+                            defaultFn defaultTransactionValue
 
-                            Just s ->
-                                stringToBool s
+                        Just s ->
+                            stringToBool s
 
-                    isIncome =
-                        getBoolWithdefault 0 .isIncome
+                isIncome =
+                    getBoolWithdefault 0 .isIncome
 
-                    getStringWithdefault index defaultFn =
-                        case Array.get index valueArray of
-                            Nothing ->
-                                defaultFn defaultTransactionValue
+                getStringWithdefault index defaultFn =
+                    case Array.get index valueArray of
+                        Nothing ->
+                            defaultFn defaultTransactionValue
 
-                            Just str ->
-                                str
+                        Just str ->
+                            String.trim str
 
-                    date =
-                        getStringWithdefault 1 .date
+                date =
+                    getStringWithdefault 1 .date
 
-                    category =
-                        getStringWithdefault 2 .category
+                category =
+                    getStringWithdefault 2 .category
 
-                    name =
-                        getStringWithdefault 3 .name
+                name =
+                    getStringWithdefault 3 .name
 
-                    price =
-                        getStringWithdefault 4 .price
+                price =
+                    getStringWithdefault 4 .price
 
-                    amount =
-                        getStringWithdefault 5 .amount
+                rawAmount =
+                    getStringWithdefault 5 .amount
 
-                    description =
-                        getStringWithdefault 6 .description
+                amount = if rawAmount == "1" then "" else rawAmount
 
-                    currency =
-                        getStringWithdefault 7 .currency
+                description =
+                    getStringWithdefault 6 .description
 
-                    lastUpdated =
-                        Array.get 9 valueArray
-                            |> Maybe.andThen (\str -> String.toInt str)
-                            |> Maybe.map (\int -> Time.millisToPosix int)
-                            |> Maybe.withDefault defaultTransactionValue.lastUpdated
+                currency =
+                    getStringWithdefault 7 .currency
 
-                    isDeleted =
-                        getBoolWithdefault 10 .isDeleted
+                lastUpdated =
+                    Array.get 9 valueArray
+                        |> Maybe.andThen (\str -> String.toInt str)
+                        |> Maybe.map (\int -> Time.millisToPosix int)
+                        |> Maybe.withDefault defaultTransactionValue.lastUpdated
 
-                    transactionData : Data
-                    transactionData =
-                        { isIncome = isIncome
-                        , date = date
-                        , category = category
-                        , name = name
-                        , price = price
-                        , amount = amount
-                        , description = description
-                        , currency = currency
-                        , id = id
-                        , lastUpdated = lastUpdated
-                        , isDeleted = isDeleted
-                        }
+                isDeleted =
+                    getBoolWithdefault 10 .isDeleted
 
-                    idString =
-                        Prng.Uuid.toString transactionData.id
+                transactionData : Data
+                transactionData =
+                    { isIncome = isIncome
+                    , date = date
+                    , category = category
+                    , name = name
+                    , price = price
+                    , amount = amount
+                    , description = description
+                    , currency = currency
+                    , id = id
+                    , lastUpdated = lastUpdated
+                    , isDeleted = isDeleted
+                    }
 
-                    newDecimalsDict =
-                        updateDecimalsDict transactionData decimalsDict
-                in
-                case getTransaction decimalsDict transactionData of
-                    Just transaction ->
-                        { transactionsDict =
-                            Dict.insert
-                                idString
-                                transaction
-                                transactionsDict
-                        , invalidTransactionData = invalidTransactionData
-                        , newUuidSeed = seed
-                        , decimalsDict = newDecimalsDict
-                        }
+                idString =
+                    Prng.Uuid.toString transactionData.id
 
-                    Nothing ->
-                        { transactionsDict = transactionsDict
-                        , invalidTransactionData = transactionData :: invalidTransactionData
-                        , newUuidSeed = seed
-                        , decimalsDict = decimalsDict
-                        }
-            )
-            { transactionsDict = Dict.empty
-            , invalidTransactionData = []
-            , newUuidSeed = uuidSeed
-            , decimalsDict = Dict.empty
-            }
+                newDecimalsDict =
+                    updateDecimalsDict transactionData decimalsDict
+            in
+            case getTransaction decimalsDict transactionData of
+                Just transaction ->
+                    { transactionsDict =
+                        Dict.insert
+                            idString
+                            transaction
+                            transactionsDict
+                    , invalidTransactionData = invalidTransactionData
+                    , newUuidSeed = seed
+                    , decimalsDict = newDecimalsDict
+                    }
+
+                Nothing ->
+                    { transactionsDict = transactionsDict
+                    , invalidTransactionData = transactionData :: invalidTransactionData
+                    , newUuidSeed = seed
+                    , decimalsDict = decimalsDict
+                    }
+        )
+        { transactionsDict = Dict.empty
+        , invalidTransactionData = []
+        , newUuidSeed = uuidSeed
+        , decimalsDict = Dict.empty
+        }
+        listOfRows
 
 
 type alias TransactionsFromJs =
