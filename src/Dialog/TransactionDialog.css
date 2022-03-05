@@ -41,8 +41,8 @@
     height: 40px;
     align-items: center;
     justify-content: center;
+    background-color: var(--c-gray-1);
     border-radius: 50%;
-    filter: drop-shadow(0 0 2px var(--c-gray-1));
 
     &::before,
     &::after {
