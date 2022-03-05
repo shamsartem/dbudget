@@ -40,23 +40,20 @@
     align-items: center;
     justify-content: center;
     border-radius: 50%;
+    filter: drop-shadow(0 0 2px var(--c-gray-1));
 
     &::before,
     &::after {
       position: absolute;
       width: 60%;
-      height: 2px;
-      background-color: var(--c-gray-8);
+      height: 3px;
+      background-color: var(--c-gray-7);
       content: '';
       transform: rotate(45deg);
     }
 
     &::after {
       transform: rotate(-45deg);
-    }
-
-    &:focus {
-      outline: 1px solid var(--c-gray-8);
     }
   }
 
@@ -89,5 +86,14 @@
 
   &_lastUpdated {
     margin-top: 15px;
+  }
+
+  &_warningTitle {
+    margin-bottom: 15px;
+    font-weight: var(--fw-bold);
+  }
+
+  &_warningButton {
+    width: 100%;
   }
 }

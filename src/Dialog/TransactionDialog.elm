@@ -21,14 +21,15 @@ import Html.Attributes exposing (class, disabled, id, novalidate, type_)
 import Html.Events exposing (onClick, onSubmit)
 import Json.Decode as Decode
 import Numeric.Decimal as Decimal
-import Numeric.Nat as Nat
+import Numeric.Nat as Nat exposing (Nat)
 import Port
 import Route
 import Store exposing (Store)
 import Task
 import Time exposing (Posix)
 import Transaction
-import View.Checkbox exposing (viewCheckbox)
+import View.Checkbox as Checkbox
+import View.Confirm as Confirm
 import View.Input as Input
 
 
@@ -49,6 +50,12 @@ type alias DirtyRecord =
     }
 
 
+type ConfirmType
+    = NoConfirm
+    | ConfirmDelete Transaction.Data
+    | ConfirmUpdateCurrency Transaction.Data String
+
+
 type alias DialogData =
     { transactionData : Transaction.Data
     , dirtyRecord : DirtyRecord
@@ -59,6 +66,7 @@ type alias DialogData =
     , categories : List String
     , names : List String
     , currencies : List String
+    , confirmType : ConfirmType
     }
 
 
@@ -77,14 +85,14 @@ type alias Model =
     }
 
 
-baseClassName : String
-baseClassName =
+baseClass : String
+baseClass =
     "Transaction"
 
 
 cl : String -> String
 cl elementAndOrModifier =
-    baseClassName ++ "_" ++ elementAndOrModifier
+    baseClass ++ "_" ++ elementAndOrModifier
 
 
 c : String -> Attribute msg
@@ -261,6 +269,7 @@ init initType store signedInData =
             , categories = getCategories filteredBasedOnIsIncome transactionData
             , names = getNames filteredByCategory transactionData
             , currencies = getCurrencies notDeletedTransactionDataList transactionData
+            , confirmType = NoConfirm
             }
 
         ( dialog, newStore ) =
@@ -326,6 +335,7 @@ view model =
                 (button
                     [ class "button"
                     , c "button"
+                    , onClick DeleteClicked
                     , disabled dialogData.isButtonsDisabled
                     , type_ "button"
                     ]
@@ -368,7 +378,7 @@ view model =
 
 viewMessage : String -> Html Msg
 viewMessage message =
-    div [ class baseClassName, class "fullSize", id dialogId ]
+    div [ class baseClass, class "fullSize", id dialogId ]
         [ button [ c "closeButton", id closeButtonId, onClick ClosedDialog ]
             [ span [ class "visuallyHidden" ] [ text "Close" ]
             ]
@@ -441,6 +451,102 @@ viewLastUpdated currentTimeZone lastUpdated =
             text ""
 
 
+getError : Transaction.DecimalsDict -> Transaction.Data -> Transaction.Field -> Maybe String
+getError decimalsDict transactionData field =
+    case Transaction.validateTransactionData decimalsDict transactionData of
+        Ok _ ->
+            Nothing
+
+        Err list ->
+            list
+                |> List.filter (\( t, _ ) -> t == field)
+                |> List.head
+                |> Maybe.map (\( _, err ) -> err)
+
+
+getTextUnderInput :
+    Transaction.DecimalsDict
+    -> Transaction.Data
+    -> Transaction.Field
+    -> String
+    -> Bool
+    -> Input.TextUnderInput
+getTextUnderInput decimalsDict transactionData field warningText hasWarning =
+    case getError decimalsDict transactionData field of
+        Nothing ->
+            if hasWarning then
+                Input.Warning (Just warningText)
+
+            else
+                Input.Warning Nothing
+
+        Just error ->
+            Input.Error (Just error)
+
+
+getNewDecimals : String -> Nat
+getNewDecimals price =
+    Transaction.stringToDecimal price Nat.nat0 0
+        |> Result.map (\decimal -> Decimal.getPrecision decimal)
+        |> Result.withDefault Nat.nat0
+
+
+getNewDecimalsString : Nat -> String
+getNewDecimalsString newDecimals =
+    newDecimals
+        |> Nat.toInt
+        |> String.fromInt
+
+
+getTextUnderInputForCurrency : List String -> Transaction.DecimalsDict -> Transaction.Data -> Input.TextUnderInput
+getTextUnderInputForCurrency currencies decimalsDict transactionData =
+    getTextUnderInput decimalsDict
+        transactionData
+        Transaction.Currency
+        ("\""
+            ++ transactionData.currency
+            ++ "\" will be added as a new currency with "
+            ++ (transactionData.price |> getNewDecimals |> getNewDecimalsString)
+            ++ " decimal places"
+        )
+        (not (List.member transactionData.currency currencies))
+
+
+getTextUnderInputForPrice : Transaction.DecimalsDict -> Transaction.Data -> Input.TextUnderInput
+getTextUnderInputForPrice decimalsDict transactionData =
+    let
+        newDecimals =
+            getNewDecimals transactionData.price
+    in
+    getTextUnderInput decimalsDict
+        transactionData
+        Transaction.Price
+        ("\""
+            ++ transactionData.currency
+            ++ "\" currency will have "
+            ++ getNewDecimalsString newDecimals
+            ++ " decimal places"
+        )
+        (transactionData.currency
+            /= ""
+            && (Dict.get transactionData.currency decimalsDict
+                    |> Maybe.withDefault Nat.nat0
+                    |> (\decimalsFromDict -> Nat.toInt decimalsFromDict < Nat.toInt newDecimals)
+               )
+        )
+
+
+closeConfirmWindowButtonView : Html Msg
+closeConfirmWindowButtonView =
+    button
+        [ class "button"
+        , c "warningButton"
+        , onClick ClosedConfirmWindow
+        , type_ "button"
+        ]
+        [ text "Cancel" ]
+
+
 viewTransactionForm : DialogData -> Model -> Html Msg -> Html Msg
 viewTransactionForm dialogData model leftButton =
     let
@@ -448,23 +554,8 @@ viewTransactionForm dialogData model leftButton =
             model.signedInData.transactions
                 |> Transaction.getDecimalsDict
 
-        { transactionData, dirtyRecord, isButtonsDisabled, currentTimeZone, categories, names, currencies } =
+        { transactionData, dirtyRecord, isButtonsDisabled, currentTimeZone, categories, names, currencies, confirmType } =
             dialogData
-
-        validity =
-            Transaction.validateTransactionData decimalsDict transactionData
-
-        getError : Transaction.Field -> Maybe String
-        getError field =
-            case validity of
-                Ok _ ->
-                    Nothing
-
-                Err list ->
-                    list
-                        |> List.filter (\( t, _ ) -> t == field)
-                        |> List.head
-                        |> Maybe.map (\( _, err ) -> err)
 
         buttons =
             div [ c "buttons" ]
@@ -477,32 +568,15 @@ viewTransactionForm dialogData model leftButton =
                     [ text "Save" ]
                 ]
 
-        getTextUnderInput field hasWarning warningText =
-            case getError field of
-                Nothing ->
-                    if hasWarning then
-                        Input.Warning (Just warningText)
+        textUnderInput =
+            getTextUnderInput decimalsDict transactionData
 
-                    else
-                        Input.Warning Nothing
-
-                Just error ->
-                    Input.Error (Just error)
-
-        newDecimals =
-            Transaction.stringToDecimal transactionData.price Nat.nat0 0
-                |> Result.map (\decimal -> Decimal.getPrecision decimal)
-                |> Result.withDefault Nat.nat0
-
-        newDecimalsString =
-            newDecimals
-                |> Nat.toInt
-                |> String.fromInt
+        error =
+            getError decimalsDict transactionData
 
         textsUnderInputs =
             { category =
-                getTextUnderInput Transaction.Category
-                    (not (List.member transactionData.category categories))
+                textUnderInput Transaction.Category
                     ("\""
                         ++ transactionData.category
                         ++ "\" will be added as a new Category for your "
@@ -512,53 +586,33 @@ viewTransactionForm dialogData model leftButton =
                             else
                                 "Expenses"
                            )
-                        ++ " when you save"
                     )
+                    (not (List.member transactionData.category categories))
             , name =
-                getTextUnderInput Transaction.Name
-                    (transactionData.category /= "" && not (List.member transactionData.name names))
+                textUnderInput Transaction.Name
                     ("\""
                         ++ transactionData.name
                         ++ "\" will be added to your Category \""
                         ++ transactionData.category
-                        ++ "\" when you save"
                     )
+                    (transactionData.category /= "" && not (List.member transactionData.name names))
             , currency =
-                getTextUnderInput Transaction.Currency
-                    (not (List.member transactionData.currency currencies))
-                    ("\""
-                        ++ transactionData.currency
-                        ++ "\" will be added as a new currency with "
-                        ++ newDecimalsString
-                        ++ " decimal places"
-                        ++ " when you save"
-                    )
+                getTextUnderInputForCurrency
+                    currencies
+                    decimalsDict
+                    transactionData
             , price =
-                getTextUnderInput Transaction.Price
-                    (transactionData.currency
-                        /= ""
-                        && (Dict.get transactionData.currency decimalsDict
-                                |> Maybe.withDefault Nat.nat0
-                                |> (\decimalsFromDict -> Nat.toInt decimalsFromDict < Nat.toInt newDecimals)
-                           )
-                    )
-                    ("\""
-                        ++ transactionData.currency
-                        ++ "\" currency will have "
-                        ++ newDecimalsString
-                        ++ " decimal places"
-                        ++ " when you save"
-                    )
+                getTextUnderInputForPrice decimalsDict transactionData
             }
     in
-    div [ class baseClassName, class "fullSize", id dialogId ]
+    div [ class baseClass, class "fullSize", id dialogId ]
         [ button [ c "closeButton", id closeButtonId, onClick ClosedDialog ]
             [ span [ class "visuallyHidden" ] [ text "Close" ]
             ]
         , form [ c "container", novalidate True, onSubmit SaveClicked ]
             [ h2 [ c "title" ] [ text (getTitle model) ]
             , div [ c "checkBoxWrapper" ]
-                [ viewCheckbox
+                [ Checkbox.view
                     { label = "Is Income"
                     , onCheck = SetIsIncome
                     , checked = transactionData.isIncome
@@ -576,7 +630,7 @@ viewTransactionForm dialogData model leftButton =
                 , id = "date"
                 , hasPlaceholder = False
                 , otherAttributes = [ type_ "date" ]
-                , textUnderInput = Input.Error (getError Transaction.Date)
+                , textUnderInput = Input.Error (error Transaction.Date)
                 , dirty = dirtyRecord.date
                 , maybeDatalist = Nothing
                 }
@@ -628,7 +682,7 @@ viewTransactionForm dialogData model leftButton =
                 , id = "amount"
                 , hasPlaceholder = False
                 , otherAttributes = []
-                , textUnderInput = Input.Error (getError Transaction.Amount)
+                , textUnderInput = Input.Error (error Transaction.Amount)
                 , dirty = dirtyRecord.amount
                 , maybeDatalist = Nothing
                 }
@@ -658,7 +712,7 @@ viewTransactionForm dialogData model leftButton =
                 , dirty = dirtyRecord.currency
                 , maybeDatalist = Just currencies
                 }
-            , case getError Transaction.FullPrice of
+            , case error Transaction.FullPrice of
                 Nothing ->
                     div [ c "fullPrice" ]
                         [ case Transaction.getFullPrice transactionData decimalsDict of
@@ -675,6 +729,47 @@ viewTransactionForm dialogData model leftButton =
             , buttons
             , viewLastUpdated currentTimeZone transactionData.lastUpdated
             ]
+        , case confirmType of
+            NoConfirm ->
+                text ""
+
+            ConfirmUpdateCurrency td warning ->
+                Confirm.view
+                    { title =
+                        h2
+                            [ c "warningTitle" ]
+                            [ text warning ]
+                    , buttons =
+                        [ closeConfirmWindowButtonView
+                        , button
+                            [ class "button"
+                            , c "warningButton"
+                            , onClick (ConfirmedSave td)
+                            , type_ "button"
+                            ]
+                            [ text "Ok" ]
+                        ]
+                    , handleClose = ClosedConfirmWindow
+                    }
+
+            ConfirmDelete td ->
+                Confirm.view
+                    { title =
+                        h2
+                            [ c "warningTitle" ]
+                            [ text "Are you sure you want to delete?" ]
+                    , buttons =
+                        [ closeConfirmWindowButtonView
+                        , button
+                            [ class "button"
+                            , c "warningButton"
+                            , onClick (ConfirmedDelete td)
+                            , type_ "button"
+                            ]
+                            [ text "Delete" ]
+                        ]
+                    , handleClose = ClosedConfirmWindow
+                    }
         ]
 
 
@@ -688,28 +783,47 @@ type Msg
     | SetField Transaction.Field String
     | BluredFromField Transaction.Field
     | SaveClicked
-    | GotTimeNowBeforeSave Posix
-    | Saved
+    | ConfirmedSave Transaction.Data
+    | GotTimeNowBeforeSave Transaction.Data Posix
     | DeleteClicked
-    | GotTimeNowBeforeDelete Posix
-    | DeleteExistingTransaction
+    | ConfirmedDelete Transaction.Data
     | NoOp
     | GotTimeZone Time.Zone
+    | ClosedConfirmWindow
 
 
-escDecoder : Decode.Decoder Msg
-escDecoder =
-    Decode.map toEscKey (Decode.field "key" Decode.string)
+escDecoder : Model -> Decode.Decoder Msg
+escDecoder model =
+    Decode.map (toEscKey model) (Decode.field "key" Decode.string)
 
 
-toEscKey : String -> Msg
-toEscKey string =
-    case string of
-        "Escape" ->
-            ClosedDialog
+toEscKey : Model -> String -> Msg
+toEscKey model string =
+    let
+        maybeCloseDialog =
+            case string of
+                "Escape" ->
+                    ClosedDialog
 
-        _ ->
-            NoOp
+                _ ->
+                    NoOp
+    in
+    case getDialogDataField .confirmType model.dialog of
+        Just confirmType ->
+            case confirmType of
+                NoConfirm ->
+                    maybeCloseDialog
+
+                _ ->
+                    case string of
+                        "Escape" ->
+                            ClosedConfirmWindow
+
+                        _ ->
+                            NoOp
+
+        Nothing ->
+            maybeCloseDialog
 
 
 updateDialog : (DialogData -> DialogData) -> Model -> Model
@@ -768,32 +882,6 @@ update msg model =
             , Cmd.none
             )
 
-        updateDirtyRecord : (DirtyRecord -> DirtyRecord) -> ( Model, Cmd Msg )
-        updateDirtyRecord transform =
-            ( updateDialog
-                (\dd -> { dd | dirtyRecord = transform dd.dirtyRecord })
-                model
-            , Cmd.none
-            )
-
-        updateGotTimeNow posixTime message =
-            ( updateDialog
-                (\dd ->
-                    let
-                        transactionData =
-                            dd.transactionData
-
-                        newTransactionData =
-                            { transactionData | lastUpdated = posixTime }
-                    in
-                    { dd | transactionData = newTransactionData }
-                )
-                model
-            , Task.perform
-                (\_ -> message)
-                (Task.succeed message)
-            )
-
         pushUrlBack =
             case dialog of
                 InvalidTransaction _ ->
@@ -801,39 +889,17 @@ update msg model =
 
                 _ ->
                     Route.pushUrl model.store.navKey Route.TransactionList
-
-        saveTransactionData transactionData =
-            case Transaction.getTransaction decimalsDict transactionData of
-                Just transaction ->
-                    let
-                        { password, username } =
-                            Cred.credToCredData cred
-
-                        newTransactions =
-                            Transaction.insertTransaction
-                                model.signedInData.transactions
-                                transaction
-
-                        newSignedInData =
-                            { signedInData
-                                | transactions = newTransactions
-                            }
-                    in
-                    ( { model | signedInData = newSignedInData }
-                    , Cmd.batch
-                        [ pushUrlBack
-                        , Port.updatedTransactions
-                            (Transaction.toJsonValue newTransactions)
-                            password
-                            username
-                        ]
-                    )
-
-                -- do not save if transaction is invalid
-                Nothing ->
-                    ( model, Cmd.none )
     in
     case msg of
+        ClosedConfirmWindow ->
+            ( updateDialog
+                (\dd ->
+                    { dd | confirmType = NoConfirm }
+                )
+                model
+            , Cmd.none
+            )
+
         GotTimeZone zone ->
             ( updateDialog
                 (\dd ->
@@ -943,6 +1009,14 @@ update msg model =
                     ( model, Cmd.none )
 
         BluredFromField field ->
+            let
+                updateDirtyRecord transform =
+                    ( updateDialog
+                        (\dd -> { dd | dirtyRecord = transform dd.dirtyRecord })
+                        model
+                    , Cmd.none
+                    )
+            in
             case field of
                 Transaction.Date ->
                     updateDirtyRecord (\val -> { val | date = True })
@@ -968,29 +1042,100 @@ update msg model =
         NoOp ->
             ( model, Cmd.none )
 
-        GotTimeNowBeforeSave posixTime ->
-            updateGotTimeNow posixTime Saved
-
-        GotTimeNowBeforeDelete posixTime ->
-            updateGotTimeNow posixTime DeleteExistingTransaction
-
         SaveClicked ->
-            ( updateDialog
-                (\dd ->
-                    { dd
-                        | dirtyRecord =
-                            { date = True
-                            , category = True
-                            , name = True
-                            , price = True
-                            , amount = True
-                            , description = True
-                            , currency = True
-                            }
-                    }
+            case
+                ( getDialogDataField .transactionData dialog
+                , getDialogDataField .currencies dialog
                 )
+            of
+                ( Just transactionData, Just currencies ) ->
+                    case Transaction.getTransaction decimalsDict transactionData of
+                        Just _ ->
+                            let
+                                checkForWarnings : Input.TextUnderInput -> Maybe Input.TextUnderInput -> ( Model, Cmd Msg )
+                                checkForWarnings textUnderInput maybeAnotherTextUnderInput =
+                                    case textUnderInput of
+                                        Input.Warning (Just text) ->
+                                            ( updateDialog
+                                                (\dd ->
+                                                    { dd
+                                                        | confirmType =
+                                                            ConfirmUpdateCurrency
+                                                                transactionData
+                                                                text
+                                                    }
+                                                )
+                                                model
+                                            , Cmd.none
+                                            )
+
+                                        Input.Warning Nothing ->
+                                            case maybeAnotherTextUnderInput of
+                                                Just t ->
+                                                    checkForWarnings t Nothing
+
+                                                Nothing ->
+                                                    ( model
+                                                    , Task.succeed transactionData
+                                                        |> Task.perform ConfirmedSave
+                                                    )
+
+                                        -- currency input deffinetly has space for text
+                                        -- under input
+                                        Input.NoText ->
+                                            ( model, Cmd.none )
+
+                                        -- input with warning should never come to this state
+                                        -- see getTextUnderInput
+                                        Input.Error Nothing ->
+                                            ( model, Cmd.none )
+
+                                        -- should never happen because we already validated transaction
+                                        Input.Error (Just _) ->
+                                            ( model, Cmd.none )
+                            in
+                            checkForWarnings
+                                (getTextUnderInputForCurrency
+                                    currencies
+                                    decimalsDict
+                                    transactionData
+                                )
+                                (Just
+                                    (getTextUnderInputForPrice
+                                        decimalsDict
+                                        transactionData
+                                    )
+                                )
+
+                        -- show all errors and do not save if transaction is invalid
+                        Nothing ->
+                            ( updateDialog
+                                (\dd ->
+                                    { dd
+                                        | dirtyRecord =
+                                            { date = True
+                                            , category = True
+                                            , name = True
+                                            , price = True
+                                            , amount = True
+                                            , description = True
+                                            , currency = True
+                                            }
+                                    }
+                                )
+                                model
+                            , Cmd.none
+                            )
+
+                _ ->
+                    -- shouldn't be able to click save if there is no data to save
+                    ( model, Cmd.none )
+
+        ConfirmedSave transactionData ->
+            ( updateDialog
+                (\dd -> { dd | isButtonsDisabled = True })
                 model
-            , getTime GotTimeNowBeforeSave
+            , getTime (GotTimeNowBeforeSave transactionData)
             )
 
         DeleteClicked ->
@@ -998,58 +1143,75 @@ update msg model =
                 InvalidTransaction _ ->
                     ( model, pushUrlBack )
 
+                NewTransaction _ ->
+                    ( model, pushUrlBack )
+
                 _ ->
-                    ( model, getTime GotTimeNowBeforeDelete )
+                    case getDialogDataField .transactionData dialog of
+                        Just transactionData ->
+                            ( updateDialog
+                                (\dd ->
+                                    { dd
+                                        | confirmType =
+                                            ConfirmDelete transactionData
+                                    }
+                                )
+                                model
+                            , Cmd.none
+                            )
 
-        Saved ->
-            case dialog of
-                InvalidTransaction dialogData ->
-                    saveTransactionData dialogData.transactionData
+                        -- shouldn't be able to click delete if there is
+                        -- no transaction or it is already deleted
+                        Nothing ->
+                            ( model, Cmd.none )
 
-                NewTransaction dialogData ->
-                    saveTransactionData dialogData.transactionData
-
-                EditTransaction dialogData ->
-                    saveTransactionData dialogData.transactionData
-
-                -- ignore save when no transaction or it is deleted
-                NoTransactionWithThisId ->
-                    ( model, Cmd.none )
-
-                TransactionIsDeleted ->
-                    ( model, Cmd.none )
-
-        DeleteExistingTransaction ->
+        ConfirmedDelete transactionData ->
             let
-                deleteTransaction dialogData =
+                deletedTransaction =
                     let
                         cleanTransaction =
                             Transaction.getDefaultTransactionValue
-                                dialogData.transactionData.id
+                                transactionData.id
                     in
-                    { cleanTransaction
-                        | lastUpdated = dialogData.transactionData.lastUpdated
-                        , isDeleted = True
-                    }
+                    { cleanTransaction | isDeleted = True }
             in
-            case dialog of
-                InvalidTransaction dialogData ->
-                    saveTransactionData (deleteTransaction dialogData)
+            ( model, getTime (GotTimeNowBeforeSave deletedTransaction) )
 
-                NewTransaction dialogData ->
-                    saveTransactionData (deleteTransaction dialogData)
+        GotTimeNowBeforeSave transactionData lastUpdated ->
+            case Transaction.getTransaction decimalsDict { transactionData | lastUpdated = lastUpdated } of
+                Just transaction ->
+                    let
+                        { password, username } =
+                            Cred.credToCredData cred
 
-                EditTransaction dialogData ->
-                    saveTransactionData (deleteTransaction dialogData)
+                        newTransactions =
+                            Transaction.insertTransaction
+                                model.signedInData.transactions
+                                transaction
 
-                -- ignore save when no transaction or it is deleted
-                NoTransactionWithThisId ->
-                    ( model, Cmd.none )
+                        newSignedInData =
+                            { signedInData
+                                | transactions = newTransactions
+                            }
+                    in
+                    ( { model | signedInData = newSignedInData }
+                    , Cmd.batch
+                        [ pushUrlBack
+                        , Port.updatedTransactions
+                            (Transaction.toJsonValue newTransactions)
+                            password
+                            username
+                        ]
+                    )
 
-                TransactionIsDeleted ->
-                    ( model, Cmd.none )
+                -- should never happen because we already validated in SaveClicked
+                -- (we don't care about calidity in DeleteClicked)
+                Nothing ->
+                    ( model
+                    , Cmd.none
+                    )
 
 
-subscriptions : Sub Msg
-subscriptions =
-    onKeyDown escDecoder
+subscriptions : Model -> Sub Msg
+subscriptions model =
+    onKeyDown (escDecoder model)

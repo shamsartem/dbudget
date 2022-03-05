@@ -48,14 +48,14 @@ type alias Config msg =
     }
 
 
-baseClassName : String
-baseClassName =
+baseClass : String
+baseClass =
     "Input"
 
 
 cl : String -> String
 cl elementAndOrModifier =
-    baseClassName ++ "_" ++ elementAndOrModifier
+    baseClass ++ "_" ++ elementAndOrModifier
 
 
 c : String -> Attribute msg
@@ -285,7 +285,7 @@ view config =
                     ]
     in
     Keyed.node "div"
-        [ class baseClassName ]
+        [ class baseClass ]
         (List.concat
             [ inputhtml
             , textUnderInput

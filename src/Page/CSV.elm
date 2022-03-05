@@ -24,7 +24,7 @@ import Store exposing (Store)
 import Task
 import Time exposing (Posix)
 import Transaction
-import View.Header as Header exposing (viewHeader)
+import View.Header as Header
 import View.Loader as Loader
 
 
@@ -36,14 +36,14 @@ type DialogModel
         }
 
 
-baseClassName : String
-baseClassName =
+baseClass : String
+baseClass =
     "CSV"
 
 
 cl : String -> String
 cl elementAndOrModifier =
-    baseClassName ++ "_" ++ elementAndOrModifier
+    baseClass ++ "_" ++ elementAndOrModifier
 
 
 c : String -> Attribute msg
@@ -130,8 +130,8 @@ init store signedInData =
 
 view : Model -> Html Msg
 view model =
-    div [ class baseClassName, class "page" ]
-        [ viewHeader Header.CSV
+    div [ class baseClass, class "page" ]
+        [ Header.view Header.CSV
         , div [ c "container" ]
             (case model.csv of
                 NoCsv ->
@@ -348,6 +348,11 @@ update msg model =
                     )
 
 
-subscriptions : Sub Msg
-subscriptions =
-    Sub.map GotDialogMsg TransactionDialog.subscriptions
+subscriptions : Model -> Sub Msg
+subscriptions model =
+    case model.dialogModel of
+        DialogModel m ->
+            Sub.map GotDialogMsg (TransactionDialog.subscriptions m)
+
+        _ ->
+            Sub.none

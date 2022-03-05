@@ -1,5 +1,6 @@
 module Transaction exposing
     ( Data
+    , DecimalsDict
     , Field(..)
     , ParseError(..)
     , Transaction

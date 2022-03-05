@@ -5,14 +5,14 @@ import Html.Attributes exposing (class)
 import Route
 
 
-baseClassName : String
-baseClassName =
+baseClass : String
+baseClass =
     "NotFound"
 
 
 cl : String -> String
 cl elementAndOrModifier =
-    baseClassName ++ "_" ++ elementAndOrModifier
+    baseClass ++ "_" ++ elementAndOrModifier
 
 
 c : String -> Attribute msg
@@ -26,7 +26,7 @@ c elementAndOrModifier =
 
 view : Html msg
 view =
-    main_ [ class baseClassName ]
+    main_ [ class baseClass ]
         [ h1 [ c "title" ]
             [ text "Page not found" ]
         , a

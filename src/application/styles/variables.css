@@ -99,7 +99,7 @@
   --l-danger-light: 70%;
   @media (prefers-color-scheme: light) {
     --l-danger-dark: 70%;
-    --l-danger: 40%;
+    --l-danger: 50%;
     --l-danger-light: 30%;
   }
 

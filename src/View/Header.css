@@ -18,7 +18,7 @@
     white-space: nowrap;
 
     &__active {
-      background-color: var(--c-gray-3);
+      background-color: var(--c-gray-2);
     }
 
     &:hover {

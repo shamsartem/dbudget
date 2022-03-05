@@ -43,14 +43,14 @@ getStore { store } =
     store
 
 
-baseClassName : String
-baseClassName =
+baseClass : String
+baseClass =
     "SignIn"
 
 
 cl : String -> String
 cl elementAndOrModifier =
-    baseClassName ++ "_" ++ elementAndOrModifier
+    baseClass ++ "_" ++ elementAndOrModifier
 
 
 c : String -> Attribute msg
@@ -141,7 +141,7 @@ view model =
                 _ ->
                     False
     in
-    div [ class baseClassName, class "page" ]
+    div [ class baseClass, class "page" ]
         [ h1 [ c "title", class "title" ] [ text "Sign in" ]
         , case model.signInState of
             SignInNotAttempted ->

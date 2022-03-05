@@ -1,4 +1,4 @@
-module View.Checkbox exposing (Config, viewCheckbox)
+module View.Checkbox exposing (Config, view)
 
 import Html exposing (..)
 import Html.Attributes
@@ -6,9 +6,11 @@ import Html.Attributes
         ( attribute
         , checked
         , class
+        , classList
         , for
         , id
         , required
+        , title
         , type_
         )
 import Html.Events exposing (onCheck)
@@ -27,17 +29,38 @@ type alias Config msg =
     }
 
 
-viewCheckbox : Config msg -> Html msg
-viewCheckbox config =
+baseClass : String
+baseClass =
+    "Checkbox"
+
+
+cl : String -> String
+cl elementAndOrModifier =
+    baseClass ++ "_" ++ elementAndOrModifier
+
+
+c : String -> Attribute msg
+c elementAndOrModifier =
+    class (cl elementAndOrModifier)
+
+
+view : Config msg -> Html msg
+view config =
     let
         requiredstar =
             if config.required then
                 [ i
                     [ attribute "aria-hidden" "true"
-                    , class "Input_required"
+                    , c "required"
+                    , classList
+                        [ ( cl "required__visible"
+                          , config.required
+                          )
+                        ]
+                    , title "required"
                     ]
                     [ text "*" ]
-                , i [ class "visuallyHidden" ] [ text "required" ]
+                , i [ class "visuallyHidden" ] [ text "required " ]
                 ]
 
             else
@@ -46,15 +69,17 @@ viewCheckbox config =
         viewlabel =
             label
                 [ for config.id
-                , class "Checkbox_label"
+                , c "label"
                 ]
             <|
-                text config.label
-                    :: requiredstar
+                List.append
+                    requiredstar
+                    [ text config.label ]
 
         checkboxattributes =
             List.append
-                [ class "Checkbox_input visuallyHidden"
+                [ c "input"
+                , class "visuallyHidden"
                 , onCheck config.onCheck
                 , checked config.checked
                 , id config.id
@@ -63,7 +88,7 @@ viewCheckbox config =
                 ]
                 config.otherAttributes
     in
-    div [ class "Checkbox" ]
+    div [ class baseClass ]
         [ input
             checkboxattributes
             []

@@ -21,7 +21,7 @@ import Route exposing (Route(..))
 import Store exposing (Store)
 import Time
 import Transaction
-import View.Header as Header exposing (viewHeader)
+import View.Header as Header
 import View.Input as Input
 
 
@@ -74,13 +74,18 @@ getStore model =
 
 
 type ListItem
-    = Header String
+    = PlaceholderHeader
     | Row DisplayedTransaction
+
+
+baseClass : String
+baseClass =
+    "TransactionsList"
 
 
 cl : String -> String
 cl elementAndOrModifier =
-    "TransactionsList_" ++ elementAndOrModifier
+    baseClass ++ "_" ++ elementAndOrModifier
 
 
 c : String -> Attribute msg
@@ -195,22 +200,22 @@ config =
         , itemHeight = InfiniteList.withConstantHeight itemHeight
         , containerHeight = containerHeight
         }
-        |> InfiniteList.withOffset 300
+        -- |> InfiniteList.withOffset 300
         |> InfiniteList.withKeepFirst 1
 
 
-getMessageView : List DisplayedTransaction -> List DisplayedTransaction -> Html Msg
-getMessageView availableTransactionsToDisplay sortedTransactions =
+getMessageView : Model -> Html Msg
+getMessageView { allTransactions, filteredAndSortedTransactions } =
     let
         getMessage msg =
             div [ c "statusMessage" ] [ text msg ]
     in
-    case availableTransactionsToDisplay of
+    case allTransactions of
         [] ->
             getMessage "You currently have no transactions. Add them by using \"+\" button in the bottom right corner of the screen"
 
         _ ->
-            case sortedTransactions of
+            case filteredAndSortedTransactions of
                 [] ->
                     getMessage "No search results"
 
@@ -218,21 +223,19 @@ getMessageView availableTransactionsToDisplay sortedTransactions =
                     text ""
 
 
-viewTransactions : Model -> List (Html Msg)
-viewTransactions { allTransactions, search, filteredAndSortedTransactions, infList } =
-    [ div
+viewTransactions : Model -> Html Msg
+viewTransactions { filteredAndSortedTransactions, infList } =
+    div
         [ c "infList", InfiniteList.onScroll InfListMsg ]
         [ InfiniteList.view
             config
             infList
-            (Header search
+            (PlaceholderHeader
                 :: (filteredAndSortedTransactions
                         |> List.map Row
                    )
             )
         ]
-    , getMessageView allTransactions filteredAndSortedTransactions
-    ]
 
 
 type InitType
@@ -293,10 +296,10 @@ init initType store signedInData =
 -- VIEW
 
 
-headerView : String -> Html Msg
-headerView search =
-    div [ c "header" ]
-        [ viewHeader Header.TransactionList
+headerView : String -> Bool -> Html Msg
+headerView search isPlaceholder =
+    div [ c "header", classList [ ( cl "header__placeholder", isPlaceholder ) ] ]
+        [ Header.view Header.TransactionList
         , form [ c "searchContainer" ]
             [ div [ c "search" ]
                 [ Input.view
@@ -351,8 +354,8 @@ transactionItemView { date, category, name, price, id, isIncome } =
 itemView : Int -> Int -> ListItem -> Html Msg
 itemView _ _ item =
     case item of
-        Header search ->
-            headerView search
+        PlaceholderHeader ->
+            headerView "" True
 
         Row displayedTransaction ->
             transactionItemView displayedTransaction
@@ -360,27 +363,25 @@ itemView _ _ item =
 
 view : Model -> Html Msg
 view model =
-    div [ class "TransactionsList page" ]
-        (List.concat
-            [ viewTransactions model
-            , [ a
-                    [ class "roundButton"
-                    , Route.href Route.TransactionNew
-                    , id Header.newtransactionid
-                    ]
-                    [ span [ attribute "aria-hidden" "true" ] [ text "+" ]
-                    , span [ class "visuallyHidden" ] [ text "Add Transaction" ]
-                    ]
-              ]
-            , [ case model.dialogModel of
-                    WithoutDialog _ ->
-                        text ""
-
-                    DialogModel m ->
-                        Html.map GotDialogMsg (TransactionDialog.view m)
-              ]
+    div
+        [ class baseClass, class "page" ]
+        [ headerView model.search False
+        , viewTransactions model
+        , getMessageView model
+        , a
+            [ class "roundButton"
+            , Route.href Route.TransactionNew
             ]
-        )
+            [ span [ attribute "aria-hidden" "true" ] [ text "+" ]
+            , span [ class "visuallyHidden" ] [ text "Add Transaction" ]
+            ]
+        , case model.dialogModel of
+            WithoutDialog _ ->
+                text ""
+
+            DialogModel m ->
+                Html.map GotDialogMsg (TransactionDialog.view m)
+        ]
 
 
 
@@ -425,6 +426,11 @@ update msg model =
                     )
 
 
-subscriptions : Sub Msg
-subscriptions =
-    Sub.map GotDialogMsg TransactionDialog.subscriptions
+subscriptions : Model -> Sub Msg
+subscriptions model =
+    case model.dialogModel of
+        DialogModel m ->
+            Sub.map GotDialogMsg (TransactionDialog.subscriptions m)
+
+        _ ->
+            Sub.none

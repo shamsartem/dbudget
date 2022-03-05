@@ -1,4 +1,4 @@
-module View.Header exposing (..)
+module View.Header exposing (ActiveNav(..), view)
 
 import Html exposing (..)
 import Html.Attributes exposing (class, classList)
@@ -17,19 +17,28 @@ type ActiveNav
     | TransactionList
     | CSV
 
+baseClass : String
+baseClass =
+    "Header"
 
-newtransactionid : String
-newtransactionid =
-    "newTransaction"
+
+cl : String -> String
+cl elementAndOrModifier =
+    baseClass ++ "_" ++ elementAndOrModifier
 
 
-viewHeader : ActiveNav -> Html msg
-viewHeader page =
+c : String -> Attribute msg
+c elementAndOrModifier =
+    class (cl elementAndOrModifier)
+
+
+view : ActiveNav -> Html msg
+view page =
     let
         linkto =
             headerLink page
     in
-    nav [ class "Header" ]
+    nav [ class baseClass ]
         [ linkto Route.TransactionList [ text "Transactions" ]
         , linkto Route.CSV [ text "CSV" ]
         , linkto Route.LogOut [ text "Log out" ]
@@ -39,9 +48,9 @@ viewHeader page =
 headerLink : ActiveNav -> Route -> List (Html msg) -> Html msg
 headerLink page route linkcontent =
     a
-        [ class "Header_link"
+        [ c "link"
         , classList
-            [ ( "Header_link__active"
+            [ ( cl "link__active"
               , isActive page route
               )
             ]

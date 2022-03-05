@@ -242,22 +242,18 @@ update message model =
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
-    let
-        pageSubs =
-            case model of
-                NotFound _ ->
-                    Sub.none
+    case model of
+        NotFound _ ->
+            Sub.none
 
-                SignIn _ ->
-                    Sub.map GotSignInMsg SignIn.subscriptions
+        SignIn _ ->
+            Sub.map GotSignInMsg SignIn.subscriptions
 
-                TransactionList _ ->
-                    Sub.map GotTransactionListMsg TransactionList.subscriptions
+        TransactionList m ->
+            Sub.map GotTransactionListMsg (TransactionList.subscriptions m)
 
-                CSV _ ->
-                    Sub.map GotCSVMsg CSV.subscriptions
-    in
-    pageSubs
+        CSV m ->
+            Sub.map GotCSVMsg (CSV.subscriptions m)
 
 
 

@@ -20,6 +20,8 @@
 
 @import '../../View/Loader.css';
 
+@import '../../View/Confirm.css';
+
 /* pages */
 
 @import '../../Page/NotFound.css';

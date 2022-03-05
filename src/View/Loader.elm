@@ -1,17 +1,17 @@
-module View.Loader exposing (..)
+module View.Loader exposing (view)
 
 import Html exposing (Attribute, div, text)
 import Html.Attributes exposing (class)
 
 
-baseClassName : String
-baseClassName =
+baseClass : String
+baseClass =
     "Loader"
 
 
 cl : String -> String
 cl elementAndOrModifier =
-    baseClassName ++ "_" ++ elementAndOrModifier
+    baseClass ++ "_" ++ elementAndOrModifier
 
 
 c : String -> Attribute msg
@@ -21,7 +21,7 @@ c elementAndOrModifier =
 
 view : Maybe String -> Html.Html msg
 view maybeText =
-    div [ class baseClassName ]
+    div [ class baseClass ]
         [ div [ c "container" ]
             [ div [ c "dot", c "dot__1" ] []
             , div [ c "dot", c "dot__2" ] []
