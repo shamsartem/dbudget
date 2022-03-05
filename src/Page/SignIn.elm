@@ -91,7 +91,7 @@ init store =
     ( { store = store
       , username = ""
       , password = ""
-      , deviceName = ""
+      , deviceName = store.deviceName
       , dirtyRecord =
             { deviceName = False
             , password = False
@@ -246,6 +246,7 @@ update msg model =
                 Just cred ->
                     ( { model
                         | signInState = SignedInAndLoading cred
+                        , store = { store | deviceName = model.deviceName }
                       }
                     , Port.handleSignIn (Cred.toJsonString cred)
                     )

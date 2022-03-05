@@ -25,6 +25,7 @@ type alias Store =
     , url : Url
     , uuidSeed : UuidSeed
     , signedInData : Maybe SignedInData
+    , deviceName : String
     }
 
 

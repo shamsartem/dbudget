@@ -15,7 +15,9 @@ import UuidSeed exposing (UuidSeed)
 
 
 type alias Flags =
-    { seedAndExtension : UuidSeed.SeedAndExtension }
+    { seedAndExtension : UuidSeed.SeedAndExtension
+    , deviceName : String
+    }
 
 
 
@@ -30,8 +32,9 @@ type Model
 
 
 initialModel : Maybe UuidSeed -> Flags -> Url -> Nav.Key -> ( Model, Cmd Msg )
-initialModel maybeSeed { seedAndExtension } url key =
+initialModel maybeSeed { seedAndExtension, deviceName } url key =
     let
+        store : Store
         store =
             { navKey = key
             , url = url
@@ -40,6 +43,7 @@ initialModel maybeSeed { seedAndExtension } url key =
                     (UuidSeed.init seedAndExtension)
                     maybeSeed
             , signedInData = Nothing
+            , deviceName = deviceName
             }
     in
     case Route.fromUrl url of
@@ -178,7 +182,7 @@ changeRouteTo maybeRoute store =
                                 -- seed and extension  ( 0, [ 0 ] ) is not
                                 -- actually used because Just above
                                 -- but it is needed to typecheck
-                                { seedAndExtension = ( 0, [ 0 ] ) }
+                                { seedAndExtension = ( 0, [ 0 ] ), deviceName = store.deviceName }
                                 store.url
                                 store.navKey
                     in

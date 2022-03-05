@@ -1,4 +1,5 @@
 import { Elm } from '../Main.elm'
+import { LOCAL_STORAGE_DEVICE_NAME } from './consts'
 import sendFromElm from './ports/sentFromElm'
 import './styles/common.css'
 
@@ -21,8 +22,12 @@ const getRandomInts = (n: number) => {
 // We get 5 here, since the Pcg.Extended generator performs slightly faster if our extension array
 // has a size that is a power of two (4 here).
 const randomIntegers = getRandomInts(5)
+
+const deviceName = localStorage.getItem(LOCAL_STORAGE_DEVICE_NAME)
+
 const flags = {
   seedAndExtension: [randomIntegers[0], randomIntegers.slice(1)],
+  deviceName: deviceName ?? '',
 }
 
 const appEl = document.getElementById('app')

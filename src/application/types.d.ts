@@ -35,6 +35,7 @@ declare module "*.elm" {
         node: Element;
         flags: {
           seedAndExtension: (number | number[])[];
+          deviceName: string;
         };
       }) => ElmApp;
     };
