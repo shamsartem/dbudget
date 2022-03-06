@@ -279,7 +279,7 @@ view config =
                             [ id datalistId ]
                             (List.map
                                 (\item -> option [ value item ] [])
-                                (List.take 10 list)
+                                (List.take 17 list)
                             )
                       )
                     ]
