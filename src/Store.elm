@@ -3,6 +3,10 @@ module Store exposing
     , Store
     , getNewUuid
     , getStore
+    , setStore
+    , windowWidthExtraLarge
+    , windowWidthLarge
+    , windowWidthSmall
     )
 
 import Browser.Navigation as Nav
@@ -26,7 +30,28 @@ type alias Store =
     , uuidSeed : UuidSeed
     , signedInData : Maybe SignedInData
     , deviceName : String
+    , windowWidth : Int
     }
+
+
+
+-- WINDOW WIDTH
+-- please update media.css as well
+
+
+windowWidthSmall : Int
+windowWidthSmall =
+    768
+
+
+windowWidthLarge : Int
+windowWidthLarge =
+    992
+
+
+windowWidthExtraLarge : Int
+windowWidthExtraLarge =
+    1200
 
 
 getNewUuid : Store -> ( Store, Uuid )
@@ -48,3 +73,8 @@ getStore a =
             a.signedInData
     in
     { store | signedInData = Just signedInData }
+
+
+setStore : Store -> { a | store : Store } -> { a | store : Store }
+setStore store a =
+    { a | store = store }

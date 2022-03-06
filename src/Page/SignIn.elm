@@ -1,4 +1,13 @@
-module Page.SignIn exposing (Model, Msg(..), getStore, init, subscriptions, update, view)
+module Page.SignIn exposing
+    ( Model
+    , Msg(..)
+    , getStore
+    , init
+    , setStore
+    , subscriptions
+    , update
+    , view
+    )
 
 import Browser.Navigation as Nav
 import Cred exposing (Cred)
@@ -41,6 +50,11 @@ type alias Model =
 getStore : Model -> Store
 getStore { store } =
     store
+
+
+setStore : Store -> Model -> Model
+setStore store model =
+    Store.setStore store model
 
 
 baseClass : String

@@ -25,15 +25,17 @@ const randomIntegers = getRandomInts(5)
 
 const deviceName = localStorage.getItem(LOCAL_STORAGE_DEVICE_NAME)
 
-const flags = {
-  seedAndExtension: [randomIntegers[0], randomIntegers.slice(1)],
-  deviceName: deviceName ?? '',
-}
-
 const appEl = document.getElementById('app')
 
 if (appEl) {
-  const app = Elm.Main.init({ node: appEl, flags })
+  const app = Elm.Main.init({
+    node: appEl,
+    flags: {
+      seedAndExtension: [randomIntegers[0], randomIntegers.slice(1)],
+      deviceName: deviceName ?? '',
+      windowWidth: window.innerWidth,
+    },
+  })
 
   app.ports.sendFromElm.subscribe(sendFromElm(app))
 }

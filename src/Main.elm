@@ -1,6 +1,7 @@
 module Main exposing (Model, main)
 
 import Browser exposing (Document)
+import Browser.Events exposing (onResize)
 import Browser.Navigation as Nav
 import Html exposing (..)
 import Page.CSV as CSV
@@ -17,6 +18,7 @@ import UuidSeed exposing (UuidSeed)
 type alias Flags =
     { seedAndExtension : UuidSeed.SeedAndExtension
     , deviceName : String
+    , windowWidth : Int
     }
 
 
@@ -32,7 +34,7 @@ type Model
 
 
 initialModel : Maybe UuidSeed -> Flags -> Url -> Nav.Key -> ( Model, Cmd Msg )
-initialModel maybeSeed { seedAndExtension, deviceName } url key =
+initialModel maybeSeed { seedAndExtension, deviceName, windowWidth } url key =
     let
         store : Store
         store =
@@ -44,6 +46,7 @@ initialModel maybeSeed { seedAndExtension, deviceName } url key =
                     maybeSeed
             , signedInData = Nothing
             , deviceName = deviceName
+            , windowWidth = windowWidth
             }
     in
     case Route.fromUrl url of
@@ -119,6 +122,7 @@ type Msg
     | GotSignInMsg SignIn.Msg
     | GotTransactionListMsg TransactionList.Msg
     | GotCSVMsg CSV.Msg
+    | GotNewWindowWidth Int
 
 
 getStore : Model -> Store
@@ -135,6 +139,22 @@ getStore model =
 
         CSV csvModel ->
             CSV.getStore csvModel
+
+
+setStore : Store -> Model -> Model
+setStore store model =
+    case model of
+        NotFound _ ->
+            NotFound store
+
+        SignIn signInModel ->
+            SignIn (SignIn.setStore store signInModel)
+
+        TransactionList transactionListModel ->
+            TransactionList (TransactionList.setStore store transactionListModel)
+
+        CSV csvModel ->
+            CSV (CSV.setStore store csvModel)
 
 
 changeRouteTo : Maybe Route -> Store -> ( Model, Cmd Msg )
@@ -182,7 +202,10 @@ changeRouteTo maybeRoute store =
                                 -- seed and extension  ( 0, [ 0 ] ) is not
                                 -- actually used because Just above
                                 -- but it is needed to typecheck
-                                { seedAndExtension = ( 0, [ 0 ] ), deviceName = store.deviceName }
+                                { seedAndExtension = ( 0, [ 0 ] )
+                                , deviceName = store.deviceName
+                                , windowWidth = store.windowWidth
+                                }
                                 store.url
                                 store.navKey
                     in
@@ -210,6 +233,9 @@ update message model =
             model |> getStore
     in
     case ( message, model ) of
+        ( GotNewWindowWidth width, _ ) ->
+            ( setStore { store | windowWidth = width } model, Cmd.none )
+
         ( ClickedLink urlRequest, _ ) ->
             case urlRequest of
                 Browser.Internal url ->
@@ -246,18 +272,25 @@ update message model =
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
-    case model of
-        NotFound _ ->
-            Sub.none
+    let
+        pageSubscriptions =
+            case model of
+                NotFound _ ->
+                    Sub.none
 
-        SignIn _ ->
-            Sub.map GotSignInMsg SignIn.subscriptions
+                SignIn _ ->
+                    Sub.map GotSignInMsg SignIn.subscriptions
 
-        TransactionList m ->
-            Sub.map GotTransactionListMsg (TransactionList.subscriptions m)
+                TransactionList m ->
+                    Sub.map GotTransactionListMsg (TransactionList.subscriptions m)
 
-        CSV m ->
-            Sub.map GotCSVMsg (CSV.subscriptions m)
+                CSV m ->
+                    Sub.map GotCSVMsg (CSV.subscriptions m)
+    in
+    Sub.batch
+        [ pageSubscriptions
+        , onResize (\w _ -> GotNewWindowWidth w)
+        ]
 
 
 

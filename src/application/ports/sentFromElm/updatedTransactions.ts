@@ -10,5 +10,6 @@ export default async (_app: ElmApp, payload: string): Promise<void> => {
   const request = objectStore.put({ id: username, encrypted })
   request.onsuccess = () => {
     // TODO: let elm know that you saved
+    // TODO: add subscription to db to sync tabs
   }
 }

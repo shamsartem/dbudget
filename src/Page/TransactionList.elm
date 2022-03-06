@@ -6,6 +6,7 @@ module Page.TransactionList exposing
     , getStore
     , getTitle
     , init
+    , setStore
     , subscriptions
     , update
     , view
@@ -71,6 +72,19 @@ getStore model =
 
         DialogModel m ->
             Store.getStore m
+
+
+setStore : Store -> Model -> Model
+setStore store model =
+    { model
+        | dialogModel =
+            case model.dialogModel of
+                WithoutDialog m ->
+                    WithoutDialog (Store.setStore store m)
+
+                DialogModel m ->
+                    DialogModel (Store.setStore store m)
+    }
 
 
 type ListItem
