@@ -322,8 +322,7 @@ init initType store signedInData =
       }
     , Cmd.batch
         [ Task.attempt (\_ -> NoOp) (focus closeButtonId)
-        , Time.here
-            |> Task.perform GotTimeZone
+        , Task.perform GotTimeZone Time.here
         ]
     )
 
@@ -946,7 +945,8 @@ update msg model =
                                     dd.transactionData
                         in
                         { dd
-                            | filteredByCategory = filteredByCategory
+                            | filteredBasedOnIsIncome = filteredBasedOnIsIncome
+                            , filteredByCategory = filteredByCategory
                             , categories = getCategories filteredBasedOnIsIncome dd.transactionData
                             , names = getNames filteredByCategory dd.transactionData
                         }
