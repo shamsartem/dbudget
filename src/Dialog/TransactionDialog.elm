@@ -45,7 +45,6 @@ type alias DirtyRecord =
     , name : Bool
     , price : Bool
     , amount : Bool
-    , description : Bool
     , currency : Bool
     }
 
@@ -66,6 +65,7 @@ type alias DialogData =
     , categories : List String
     , names : List String
     , currencies : List String
+    , accounts : List String
     , confirmType : ConfirmType
     }
 
@@ -240,6 +240,14 @@ getCurrencies notDeletedTransactionDataList transactionData =
         notDeletedTransactionDataList
 
 
+getAccounts : List Transaction.Data -> Transaction.Data -> List String
+getAccounts notDeletedTransactionDataList transactionData =
+    getStringsContainingField
+        .account
+        transactionData
+        notDeletedTransactionDataList
+
+
 init : InitType -> Store -> Store.SignedInData -> ( Model, Cmd Msg )
 init initType store signedInData =
     let
@@ -272,7 +280,6 @@ init initType store signedInData =
                 , name = isDirty
                 , price = isDirty
                 , amount = isDirty
-                , description = isDirty
                 , currency = isDirty
                 }
             , isButtonsDisabled = False
@@ -282,6 +289,7 @@ init initType store signedInData =
             , categories = getCategories filteredBasedOnIsIncome transactionData
             , names = getNames filteredByCategory transactionData
             , currencies = getCurrencies notDeletedTransactionDataList transactionData
+            , accounts = getAccounts notDeletedTransactionDataList transactionData
             , confirmType = NoConfirm
             }
 
@@ -342,7 +350,7 @@ view model =
     case model.dialog of
         -- TODO handle invalid and new transaction buttons
         NewTransaction dialogData ->
-            viewTransactionForm dialogData
+            viewTransactionForm dialogData model.dialog
                 model
                 (button
                     [ class "button"
@@ -355,7 +363,7 @@ view model =
                 )
 
         EditTransaction dialogData ->
-            viewTransactionForm dialogData
+            viewTransactionForm dialogData model.dialog
                 model
                 (button
                     [ class "button"
@@ -368,14 +376,13 @@ view model =
                 )
 
         InvalidTransaction dialogData ->
-            viewTransactionForm dialogData
+            viewTransactionForm dialogData model.dialog
                 model
                 (button
                     [ class "button"
                     , c "button"
                     , onClick DeleteClicked
-                    , disabled
-                        dialogData.isButtonsDisabled
+                    , disabled dialogData.isButtonsDisabled
                     , type_ "button"
                     ]
                     [ text "Dismiss" ]
@@ -463,9 +470,9 @@ viewLastUpdated currentTimeZone lastUpdated =
             text ""
 
 
-getError : Transaction.DecimalsDict -> Transaction.Data -> Transaction.Field -> Maybe String
-getError decimalsDict transactionData field =
-    case Transaction.validateTransactionData decimalsDict transactionData of
+getError : Transaction.Transactions -> Transaction.Data -> Transaction.Field -> Maybe String
+getError transactions transactionData field =
+    case Transaction.validateTransactionData transactions transactionData of
         Ok _ ->
             Nothing
 
@@ -477,14 +484,14 @@ getError decimalsDict transactionData field =
 
 
 getTextUnderInput :
-    Transaction.DecimalsDict
+    Transaction.Transactions
     -> Transaction.Data
     -> Transaction.Field
     -> String
     -> Bool
     -> Input.TextUnderInput
-getTextUnderInput decimalsDict transactionData field warningText hasWarning =
-    case getError decimalsDict transactionData field of
+getTextUnderInput transactions transactionData field warningText hasWarning =
+    case getError transactions transactionData field of
         Nothing ->
             if hasWarning then
                 Input.Warning (Just warningText)
@@ -510,9 +517,9 @@ getNewDecimalsString newDecimals =
         |> String.fromInt
 
 
-getTextUnderInputForCurrency : List String -> Transaction.DecimalsDict -> Transaction.Data -> Input.TextUnderInput
-getTextUnderInputForCurrency currencies decimalsDict transactionData =
-    getTextUnderInput decimalsDict
+getTextUnderInputForCurrency : List String -> Transaction.Transactions -> Transaction.Data -> Input.TextUnderInput
+getTextUnderInputForCurrency currencies transactions transactionData =
+    getTextUnderInput transactions
         transactionData
         Transaction.Currency
         ("\""
@@ -524,13 +531,13 @@ getTextUnderInputForCurrency currencies decimalsDict transactionData =
         (not (List.member transactionData.currency currencies))
 
 
-getTextUnderInputForPrice : Transaction.DecimalsDict -> Transaction.Data -> Input.TextUnderInput
-getTextUnderInputForPrice decimalsDict transactionData =
+getTextUnderInputForPrice : Transaction.Transactions -> Transaction.Data -> Input.TextUnderInput
+getTextUnderInputForPrice transactions transactionData =
     let
         newDecimals =
             getNewDecimals transactionData.price
     in
-    getTextUnderInput decimalsDict
+    getTextUnderInput transactions
         transactionData
         Transaction.Price
         ("\""
@@ -541,11 +548,25 @@ getTextUnderInputForPrice decimalsDict transactionData =
         )
         (transactionData.currency
             /= ""
-            && (Dict.get transactionData.currency decimalsDict
+            && (Dict.get transactionData.currency (Transaction.getDecimalsDict transactions)
                     |> Maybe.withDefault Nat.nat0
                     |> (\decimalsFromDict -> Nat.toInt decimalsFromDict < Nat.toInt newDecimals)
                )
         )
+
+
+getTextUnderInputForAccount : List String -> Transaction.Transactions -> Transaction.Data -> Input.TextUnderInput
+getTextUnderInputForAccount accounts transactions transactionData =
+    getTextUnderInput transactions
+        transactionData
+        Transaction.Account
+        ("\""
+            ++ transactionData.account
+            ++ "\" will be added as a new Account with \""
+            ++ transactionData.currency
+            ++ "\" as the Currency"
+        )
+        (not (List.member transactionData.account accounts) && transactionData.account /= "")
 
 
 closeConfirmWindowButtonView : Html Msg
@@ -559,14 +580,22 @@ closeConfirmWindowButtonView =
         [ text "Cancel" ]
 
 
-viewTransactionForm : DialogData -> Model -> Html Msg -> Html Msg
-viewTransactionForm dialogData model leftButton =
-    let
-        decimalsDict =
-            model.signedInData.transactions
-                |> Transaction.getDecimalsDict
+isCurrencyDisabled : Dialog -> Transaction.Data -> Transaction.Transactions -> Bool
+isCurrencyDisabled dialog { account } transactions =
+    case dialog of
+        InvalidTransaction _ ->
+            False
+        _ ->
+            Dict.member account (Transaction.getAccountsDict transactions)
 
-        { transactionData, dirtyRecord, isButtonsDisabled, currentTimeZone, categories, names, currencies, confirmType } =
+
+viewTransactionForm : DialogData -> Dialog -> Model -> Html Msg -> Html Msg
+viewTransactionForm dialogData dialog model leftButton =
+    let
+        { transactions } =
+            model.signedInData
+
+        { transactionData, dirtyRecord, isButtonsDisabled, currentTimeZone, categories, names, currencies, accounts, confirmType } =
             dialogData
 
         buttons =
@@ -581,10 +610,10 @@ viewTransactionForm dialogData model leftButton =
                 ]
 
         textUnderInput =
-            getTextUnderInput decimalsDict transactionData
+            getTextUnderInput transactions transactionData
 
         error =
-            getError decimalsDict transactionData
+            getError transactions transactionData
 
         textsUnderInputs =
             { category =
@@ -608,13 +637,18 @@ viewTransactionForm dialogData model leftButton =
                         ++ transactionData.category
                     )
                     (transactionData.category /= "" && not (List.member transactionData.name names))
+            , price =
+                getTextUnderInputForPrice transactions transactionData
             , currency =
                 getTextUnderInputForCurrency
                     currencies
-                    decimalsDict
+                    transactions
                     transactionData
-            , price =
-                getTextUnderInputForPrice decimalsDict transactionData
+            , account =
+                getTextUnderInputForAccount
+                    accounts
+                    transactions
+                    transactionData
             }
     in
     div [ class baseClass, class "fullSize", id dialogId ]
@@ -708,7 +742,7 @@ viewTransactionForm dialogData model leftButton =
                 , hasPlaceholder = False
                 , otherAttributes = []
                 , textUnderInput = Input.Error Nothing
-                , dirty = dirtyRecord.description
+                , dirty = False
                 , maybeDatalist = Nothing
                 }
             , Input.view
@@ -719,15 +753,35 @@ viewTransactionForm dialogData model leftButton =
                 , required = True
                 , id = "currency"
                 , hasPlaceholder = False
-                , otherAttributes = []
+                , otherAttributes =
+                    [ disabled
+                        (isCurrencyDisabled dialog transactionData transactions)
+                    ]
                 , textUnderInput = textsUnderInputs.currency
                 , dirty = dirtyRecord.currency
                 , maybeDatalist = Just currencies
                 }
+            , Input.view
+                { label = "Account"
+                , onInput = SetField Transaction.Account
+                , onBlur = Just (BluredFromField Transaction.Account)
+                , value = transactionData.account
+                , required = True
+                , id = "account"
+                , hasPlaceholder = False
+                , otherAttributes = []
+                , textUnderInput = textsUnderInputs.account
+                , dirty = False
+                , maybeDatalist = Just accounts
+                }
             , case error Transaction.FullPrice of
                 Nothing ->
                     div [ c "fullPrice" ]
-                        [ case Transaction.getFullPrice transactionData decimalsDict of
+                        [ case
+                            Transaction.getFullPrice
+                                transactionData
+                                (Transaction.getDecimalsDict transactions)
+                          of
                             Ok fullPrice ->
                                 text fullPrice
 
@@ -869,9 +923,6 @@ update msg model =
         { transactions, cred } =
             signedInData
 
-        decimalsDict =
-            Transaction.getDecimalsDict transactions
-
         notDeletedTransactionDataList =
             Transaction.getNotDeletedTransactionDataList transactions
 
@@ -1009,14 +1060,42 @@ update msg model =
                     updateTransactionForm (\val -> { val | description = str }) Nothing
 
                 Transaction.Currency ->
-                    updateTransactionForm (\val -> { val | currency = str })
-                        (Just
-                            (\dd ->
-                                { dd
-                                    | currencies = getCurrencies notDeletedTransactionDataList dd.transactionData
-                                }
-                            )
+                    case getDialogDataField .transactionData dialog of
+                        Just transactionData ->
+                            if isCurrencyDisabled dialog transactionData transactions then
+                                ( model, Cmd.none )
+
+                            else
+                                updateTransactionForm (\val -> { val | currency = str })
+                                    (Just
+                                        (\dd ->
+                                            { dd
+                                                | currencies =
+                                                    getCurrencies
+                                                        notDeletedTransactionDataList
+                                                        dd.transactionData
+                                            }
+                                        )
+                                    )
+
+                        Nothing ->
+                            ( model, Cmd.none )
+
+                Transaction.Account ->
+                    updateTransactionForm
+                        (\val ->
+                            { val
+                                | account = str
+                                , currency =
+                                    case Dict.get str (Transaction.getAccountsDict transactions) of
+                                        Nothing ->
+                                            val.currency
+
+                                        Just currency ->
+                                            currency
+                            }
                         )
+                        Nothing
 
                 Transaction.FullPrice ->
                     ( model, Cmd.none )
@@ -1062,7 +1141,7 @@ update msg model =
                 )
             of
                 ( Just transactionData, Just currencies ) ->
-                    case Transaction.getTransaction decimalsDict transactionData of
+                    case Transaction.getTransaction transactions transactionData of
                         Just _ ->
                             let
                                 checkForWarnings : Input.TextUnderInput -> Maybe Input.TextUnderInput -> ( Model, Cmd Msg )
@@ -1110,12 +1189,12 @@ update msg model =
                             checkForWarnings
                                 (getTextUnderInputForCurrency
                                     currencies
-                                    decimalsDict
+                                    transactions
                                     transactionData
                                 )
                                 (Just
                                     (getTextUnderInputForPrice
-                                        decimalsDict
+                                        transactions
                                         transactionData
                                     )
                                 )
@@ -1131,7 +1210,6 @@ update msg model =
                                             , name = True
                                             , price = True
                                             , amount = True
-                                            , description = True
                                             , currency = True
                                             }
                                     }
@@ -1207,7 +1285,7 @@ update msg model =
             ( model, getTime (GotTimeNowBeforeSave deletedTransaction) )
 
         GotTimeNowBeforeSave transactionData lastUpdated ->
-            case Transaction.getTransaction decimalsDict { transactionData | lastUpdated = lastUpdated } of
+            case Transaction.getTransaction transactions { transactionData | lastUpdated = lastUpdated } of
                 Just transaction ->
                     let
                         { password, username } =

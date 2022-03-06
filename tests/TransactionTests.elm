@@ -27,6 +27,7 @@ maybeDefaultTransactionValue =
                 , id = uuid
                 , lastUpdated = Time.millisToPosix 0
                 , isDeleted = False
+                , account = ""
                 }
             )
 

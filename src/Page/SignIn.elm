@@ -278,13 +278,10 @@ update msg model =
                                     let
                                         -- ignore invalid because there should
                                         -- should only be valid in local storage
-                                        { transactionsDict } =
+                                        { transactions } =
                                             Transaction.stringToTransactionDict
                                                 store.uuidSeed
                                                 m
-
-                                        transactions =
-                                            Transaction.getTransactions transactionsDict
                                     in
                                     ( { model
                                         | store =

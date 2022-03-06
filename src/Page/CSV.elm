@@ -245,7 +245,7 @@ update msg model =
                 { password, username } =
                     Cred.credToCredData signedInData.cred
 
-                { transactionsDict, invalidTransactionData, newUuidSeed } =
+                { transactions, invalidTransactionData, newUuidSeed } =
                     Transaction.listOfRowsToTransactionsDict
                         store.uuidSeed
                         timeNow
@@ -257,7 +257,7 @@ update msg model =
                 newTransactions =
                     Transaction.mergeTransactions
                         signedInData.transactions
-                        transactionsDict
+                        (Transaction.getTransactionsDict transactions)
 
                 newStore =
                     { store | uuidSeed = newUuidSeed }
@@ -311,19 +311,7 @@ update msg model =
                         |> Transaction.getTransactionsDict
                         |> Transaction.toListOfListsOfStrings
                         |> (\list ->
-                                { headers =
-                                    [ "Is Income"
-                                    , "Date"
-                                    , "Category"
-                                    , "Name"
-                                    , "Price"
-                                    , "Amount"
-                                    , "Description"
-                                    , "Currency"
-                                    , "Id"
-                                    , "Last Updated"
-                                    , "Is Deleted"
-                                    ]
+                                { headers = Transaction.csvHeaders
                                 , records = list
                                 }
                            )
