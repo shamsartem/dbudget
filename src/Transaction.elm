@@ -6,6 +6,7 @@ module Transaction exposing
     , ParseError(..)
     , Transaction
     , Transactions
+    , csvHeaders
     , getAccountsDict
     , getDecimalsDict
     , getDefaultTransactionValue
@@ -24,7 +25,6 @@ module Transaction exposing
     , toJsonValue
     , toListOfListsOfStrings
     , validateTransactionData
-    , csvHeaders
     )
 
 import Array exposing (Array)
@@ -575,7 +575,11 @@ transactionsToAccountsDict transactionsDict =
         Dict.empty
         transactionsDict
 
+
+
 -- don't forget to update csvHeaders as well
+
+
 toListOfListsOfStrings : TransactionsDict -> List (List String)
 toListOfListsOfStrings transactionsDict =
     transactionsDict
@@ -921,7 +925,15 @@ getFullPrice : Data -> DecimalsDict -> Result ParseError String
 getFullPrice transactionData decimals =
     Result.map
         (\price ->
-            Decimal.toString price ++ " " ++ transactionData.currency
+            (if transactionData.isIncome then
+                "+"
+
+             else
+                "-"
+            )
+                ++ Decimal.toString price
+                ++ " "
+                ++ transactionData.currency
         )
         (getPrice transactionData decimals)
 
