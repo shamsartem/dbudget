@@ -34,6 +34,7 @@ type alias DisplayedTransaction =
     , name : String
     , price : String
     , lastUpdated : Int
+    , account : String
     }
 
 
@@ -122,7 +123,7 @@ transactionsToDisplayedTransactions transactions =
         |> List.map
             (\transactionData ->
                 let
-                    { isIncome, date, category, name, id, lastUpdated } =
+                    { isIncome, date, category, name, account, id, lastUpdated } =
                         transactionData
 
                     fullPrice =
@@ -138,6 +139,7 @@ transactionsToDisplayedTransactions transactions =
                 , price = fullPrice
                 , date = date
                 , category = category
+                , account = account
                 , name = name
                 , id = id
                 , lastUpdated = Time.posixToMillis lastUpdated
@@ -155,17 +157,17 @@ filterDisplayedTransactions search displayedTransactions =
         displayedTransactions
 
     else
-        displayedTransactions
-            |> List.filter
-                (\{ date, category, name } ->
-                    [ date, category, name ]
-                        |> List.any
-                            (\text ->
-                                text
-                                    |> String.toLower
-                                    |> String.contains searchLower
-                            )
-                )
+        List.filter
+            (\{ date, category, name, account } ->
+                [ date, category, name, account ]
+                    |> List.any
+                        (\text ->
+                            text
+                                |> String.toLower
+                                |> String.contains searchLower
+                        )
+            )
+            displayedTransactions
 
 
 sortTransactions : List DisplayedTransaction -> List DisplayedTransaction
