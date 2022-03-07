@@ -448,29 +448,48 @@ monthToString month =
             "Dec"
 
 
-viewLastUpdated : Maybe Time.Zone -> Posix -> Html Msg
-viewLastUpdated currentTimeZone lastUpdated =
-    case currentTimeZone of
-        Just zone ->
-            div [ c "lastUpdated" ]
-                [ text
-                    ("Last updated: "
-                        ++ String.fromInt (Time.toDay zone lastUpdated)
-                        ++ " "
-                        ++ monthToString (Time.toMonth zone lastUpdated)
-                        ++ " "
-                        ++ String.fromInt (Time.toYear zone lastUpdated)
-                        ++ " "
-                        ++ String.fromInt (Time.toHour zone lastUpdated)
-                        ++ ":"
-                        ++ String.fromInt (Time.toMinute zone lastUpdated)
-                        ++ ":"
-                        ++ String.fromInt (Time.toSecond zone lastUpdated)
-                    )
-                ]
+viewLastUpdated : Dialog -> Maybe Time.Zone -> Posix -> Html Msg
+viewLastUpdated dialog currentTimeZone lastUpdated =
+    let
+        lastUpdatedText =
+            \() ->
+                case currentTimeZone of
+                    Just zone ->
+                        div [ c "lastUpdated" ]
+                            [ text
+                                ("Last updated: "
+                                    ++ String.fromInt (Time.toDay zone lastUpdated)
+                                    ++ " "
+                                    ++ monthToString (Time.toMonth zone lastUpdated)
+                                    ++ " "
+                                    ++ String.fromInt (Time.toYear zone lastUpdated)
+                                    ++ " "
+                                    ++ String.fromInt (Time.toHour zone lastUpdated)
+                                    ++ ":"
+                                    ++ String.fromInt (Time.toMinute zone lastUpdated)
+                                    ++ ":"
+                                    ++ String.fromInt (Time.toSecond zone lastUpdated)
+                                )
+                            ]
 
-        Nothing ->
+                    Nothing ->
+                        text ""
+    in
+    case dialog of
+        InvalidTransaction _ ->
+            lastUpdatedText ()
+
+        NewTransaction _ ->
             text ""
+
+        EditTransaction _ ->
+            lastUpdatedText ()
+
+        NoTransactionWithThisId ->
+            text ""
+
+        TransactionIsDeleted ->
+            lastUpdatedText ()
 
 
 getError : Transaction.Transactions -> Transaction.Data -> Transaction.Field -> Maybe String
@@ -794,7 +813,7 @@ viewTransactionForm dialogData dialog model leftButton =
                 Just errorText ->
                     div [ c "fullPrice", c "fullPrice__error" ] [ text errorText ]
             , buttons
-            , viewLastUpdated currentTimeZone transactionData.lastUpdated
+            , viewLastUpdated dialog currentTimeZone transactionData.lastUpdated
             ]
         , case confirmType of
             NoConfirm ->
