@@ -31,6 +31,10 @@
     border-radius: var(--bdrs-md);
   }
 
+  &_input {
+    width: 100%;
+  }
+
   &_closeButton {
     position: absolute;
     z-index: var(--z-default);
