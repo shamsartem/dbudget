@@ -1,10 +1,14 @@
 port module Port exposing
     ( SentToElm
     , handleSignIn
+    , parseSentToElmMsg
     , receiveString
     , updatedTransactions
+    , refreshApp
+    , installApp
     )
 
+import Json.Decode as Decode
 import Json.Encode as Encode
 
 
@@ -22,6 +26,8 @@ port receiveString : (String -> msg) -> Sub msg
 type SendMsg
     = UpdatedTransactions
     | SignedIn
+    | RefreshApp
+    | InstallApp
 
 
 send : SendMsg -> String -> Cmd msg
@@ -34,6 +40,12 @@ send messageType payload =
 
                 SignedIn ->
                     "signedIn"
+
+                RefreshApp ->
+                    "refreshAppClicked"
+
+                InstallApp ->
+                    "installApp"
     in
     sendFromElm { msg = msg, payload = payload }
 
@@ -52,3 +64,29 @@ updatedTransactions transactionEncodeValue password username =
 handleSignIn : String -> Cmd msg
 handleSignIn cred =
     send SignedIn cred
+
+refreshApp : Cmd msg
+refreshApp =
+    send RefreshApp ""
+
+installApp : Cmd msg
+installApp =
+    send InstallApp ""
+
+parseSentToElmMsg : String -> String
+parseSentToElmMsg message =
+    case
+        Decode.decodeString
+            (Decode.map SentToElm
+                (Decode.field "msg" Decode.string)
+            )
+            message
+    of
+        Ok { msg } ->
+            msg
+
+        Err _ ->
+            -- should never happen because there will always be some
+            -- kind of message coming from js
+            -- even if it as an empty String
+            ""

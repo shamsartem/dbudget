@@ -14,7 +14,6 @@ import Cred exposing (Cred)
 import Html exposing (..)
 import Html.Attributes exposing (class, classList, disabled, novalidate)
 import Html.Events exposing (onSubmit)
-import Json.Decode as Decode
 import Port
 import Store exposing (Store)
 import Transaction
@@ -276,58 +275,44 @@ update msg model =
                     , Cmd.none
                     )
 
-        SentToElm m ->
-            case
-                Decode.decodeString
-                    (Decode.map Port.SentToElm
-                        (Decode.field "msg" Decode.string)
-                    )
-                    m
-            of
-                Ok sentToElm ->
-                    case sentToElm.msg of
-                        "signInSuccess" ->
-                            case model.signInState of
-                                SignedInAndLoading cred ->
-                                    let
-                                        -- ignore invalid because there should
-                                        -- should only be valid in local storage
-                                        { transactions } =
-                                            Transaction.stringToTransactionDict
-                                                store.uuidSeed
-                                                m
-                                    in
-                                    ( { model
-                                        | store =
-                                            { store
-                                                | signedInData =
-                                                    Just
-                                                        { transactions = transactions
-                                                        , cred = cred
-                                                        , invalidTransactionData = []
-                                                        }
-                                            }
-                                      }
-                                    , Nav.pushUrl store.navKey (Url.toString store.url)
-                                    )
-
-                                -- should never happen
-                                _ ->
-                                    ( model, Cmd.none )
-
-                        "wrongPassword" ->
-                            ( { model | signInState = WrongPassword }
-                            , Cmd.none
+        SentToElm str ->
+            case Port.parseSentToElmMsg str of
+                "signInSuccess" ->
+                    case model.signInState of
+                        SignedInAndLoading cred ->
+                            let
+                                -- ignore invalid because there should
+                                -- should only be valid in local storage
+                                { transactions } =
+                                    Transaction.stringToTransactionDict
+                                        store.uuidSeed
+                                        str
+                            in
+                            ( { model
+                                | store =
+                                    { store
+                                        | signedInData =
+                                            Just
+                                                { transactions = transactions
+                                                , cred = cred
+                                                , invalidTransactionData = []
+                                                }
+                                    }
+                              }
+                            , Nav.pushUrl store.navKey (Url.toString store.url)
                             )
 
+                        -- should never happen
                         _ ->
-                            -- ignore unknown message from js
                             ( model, Cmd.none )
 
-                Err _ ->
-                    -- should never happen because there will always be some
-                    -- kind of message coming from js
-                    -- even if it as an empty String
+                "wrongPassword" ->
+                    ( { model | signInState = WrongPassword }
+                    , Cmd.none
+                    )
+
+                _ ->
+                    -- ignore unknown message from js
                     ( model, Cmd.none )
 
         BluredFromField field ->

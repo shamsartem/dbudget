@@ -29,4 +29,13 @@
       color: var(--c-danger);
     }
   }
+
+  &_installApp {
+    display: none;
+    margin-top: 15px;
+
+    &__visible {
+      display: flex;
+    }
+  }
 }

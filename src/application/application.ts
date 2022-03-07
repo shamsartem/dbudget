@@ -1,7 +1,9 @@
 import { Elm } from '../Main.elm'
 import { LOCAL_STORAGE_DEVICE_NAME } from './consts'
-import sendFromElm from './ports/sentFromElm'
+import getElmMessageHandler from './ports/getElmMessageHandler'
 import './styles/common.css'
+import sendToElm from './ports/sendToElm'
+import { registerSW } from 'virtual:pwa-register'
 
 declare global {
   interface Window {
@@ -37,5 +39,14 @@ if (appEl) {
     },
   })
 
-  app.ports.sendFromElm.subscribe(sendFromElm(app))
+  const updateSW = registerSW({
+    onNeedRefresh() {
+      sendToElm(app, 'needRefresh')
+    },
+    onOfflineReady() {
+      sendToElm(app, 'offlineReady')
+    },
+  })
+
+  app.ports.sendFromElm.subscribe(getElmMessageHandler(app, updateSW))
 }

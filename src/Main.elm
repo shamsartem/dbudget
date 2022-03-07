@@ -8,11 +8,13 @@ import Page.CSV as CSV
 import Page.NotFound as NotFound
 import Page.SignIn as SignIn
 import Page.TransactionList as TransactionList
+import Port
 import Prng.Uuid
 import Route exposing (Route(..))
 import Store exposing (Store)
 import Url exposing (Url)
 import UuidSeed exposing (UuidSeed)
+import View.Confirm as Confirm
 
 
 type alias Flags =
@@ -47,6 +49,8 @@ initialModel maybeSeed { seedAndExtension, deviceName, windowWidth } url key =
             , signedInData = Nothing
             , deviceName = deviceName
             , windowWidth = windowWidth
+            , isRefreshWindowVisible = False
+            , isOfflineReadyWindowVisible = False
             }
     in
     case Route.fromUrl url of
@@ -95,9 +99,42 @@ getTitle model =
 view : Model -> Document Msg
 view model =
     let
+        { isOfflineReadyWindowVisible, isRefreshWindowVisible } =
+            getStore model
+
         viewPage toMsg content =
             { title = getTitle model
-            , body = [ Html.map toMsg content ]
+            , body =
+                [ Html.map toMsg content
+                , if isOfflineReadyWindowVisible then
+                    Confirm.view
+                        { title = "App is ready to work offline"
+                        , cancelButton =
+                            { title = "Ok"
+                            , handleClick = OkOfflineReadyClicked
+                            }
+                        , okButton = Nothing
+                        }
+
+                  else
+                    text ""
+                , if isRefreshWindowVisible then
+                    Confirm.view
+                        { title = "There is new app version. Update?"
+                        , cancelButton =
+                            { title = "No"
+                            , handleClick = CancelRefreshClicked
+                            }
+                        , okButton =
+                            Just
+                                { title = "Yes"
+                                , handleClick = RefreshClicked
+                                }
+                        }
+
+                  else
+                    text ""
+                ]
             }
     in
     case model of
@@ -123,6 +160,10 @@ type Msg
     | GotTransactionListMsg TransactionList.Msg
     | GotCSVMsg CSV.Msg
     | GotNewWindowWidth Int
+    | SentToElm String
+    | OkOfflineReadyClicked
+    | RefreshClicked
+    | CancelRefreshClicked
 
 
 getStore : Model -> Store
@@ -261,6 +302,46 @@ update message model =
             CSV.update subMsg csvModel
                 |> updatePageWith CSV GotCSVMsg
 
+        ( SentToElm msg, _ ) ->
+            case Port.parseSentToElmMsg msg of
+                "needRefresh" ->
+                    ( setStore
+                        { store | isRefreshWindowVisible = True }
+                        model
+                    , Cmd.none
+                    )
+
+                "offlineReady" ->
+                    ( setStore
+                        { store | isOfflineReadyWindowVisible = True }
+                        model
+                    , Cmd.none
+                    )
+
+                _ ->
+                    ( model, Cmd.none )
+
+        ( OkOfflineReadyClicked, _ ) ->
+            ( setStore
+                { store | isOfflineReadyWindowVisible = False }
+                model
+            , Cmd.none
+            )
+
+        ( RefreshClicked, _ ) ->
+            ( setStore
+                { store | isRefreshWindowVisible = False }
+                model
+            , Port.refreshApp
+            )
+
+        ( CancelRefreshClicked, _ ) ->
+            ( setStore
+                { store | isRefreshWindowVisible = False }
+                model
+            , Cmd.none
+            )
+
         ( _, _ ) ->
             -- Disregard messages that arrived for the wrong page.
             ( model, Cmd.none )
@@ -290,6 +371,7 @@ subscriptions model =
     Sub.batch
         [ pageSubscriptions
         , onResize (\w _ -> GotNewWindowWidth w)
+        , Port.receiveString SentToElm
         ]
 
 

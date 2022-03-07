@@ -90,13 +90,4 @@
   &_lastUpdated {
     margin-top: 15px;
   }
-
-  &_warningTitle {
-    margin-bottom: 15px;
-    font-weight: var(--fw-bold);
-  }
-
-  &_warningButton {
-    width: 100%;
-  }
 }

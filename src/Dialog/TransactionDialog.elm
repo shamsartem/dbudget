@@ -350,7 +350,8 @@ view model =
     case model.dialog of
         -- TODO handle invalid and new transaction buttons
         NewTransaction dialogData ->
-            viewTransactionForm dialogData model.dialog
+            viewTransactionForm dialogData
+                model.dialog
                 model
                 (button
                     [ class "button"
@@ -363,7 +364,8 @@ view model =
                 )
 
         EditTransaction dialogData ->
-            viewTransactionForm dialogData model.dialog
+            viewTransactionForm dialogData
+                model.dialog
                 model
                 (button
                     [ class "button"
@@ -376,7 +378,8 @@ view model =
                 )
 
         InvalidTransaction dialogData ->
-            viewTransactionForm dialogData model.dialog
+            viewTransactionForm dialogData
+                model.dialog
                 model
                 (button
                     [ class "button"
@@ -569,15 +572,11 @@ getTextUnderInputForAccount accounts transactions transactionData =
         (not (List.member transactionData.account accounts) && transactionData.account /= "")
 
 
-closeConfirmWindowButtonView : Html Msg
-closeConfirmWindowButtonView =
-    button
-        [ class "button"
-        , c "warningButton"
-        , onClick ClosedConfirmWindow
-        , type_ "button"
-        ]
-        [ text "Cancel" ]
+closeConfirmWindowButton : Confirm.Button Msg
+closeConfirmWindowButton =
+    { title = "Cancel"
+    , handleClick = ClosedConfirmWindow
+    }
 
 
 isCurrencyDisabled : Dialog -> Transaction.Data -> Transaction.Transactions -> Bool
@@ -585,6 +584,7 @@ isCurrencyDisabled dialog { account } transactions =
     case dialog of
         InvalidTransaction _ ->
             False
+
         _ ->
             Dict.member account (Transaction.getAccountsDict transactions)
 
@@ -801,40 +801,24 @@ viewTransactionForm dialogData dialog model leftButton =
 
             ConfirmUpdateCurrency td warning ->
                 Confirm.view
-                    { title =
-                        h2
-                            [ c "warningTitle" ]
-                            [ text warning ]
-                    , buttons =
-                        [ closeConfirmWindowButtonView
-                        , button
-                            [ class "button"
-                            , c "warningButton"
-                            , onClick (ConfirmedSave td)
-                            , type_ "button"
-                            ]
-                            [ text "Ok" ]
-                        ]
-                    , handleClose = ClosedConfirmWindow
+                    { title = warning
+                    , cancelButton = closeConfirmWindowButton
+                    , okButton =
+                        Just
+                            { title = "Ok"
+                            , handleClick = ConfirmedSave td
+                            }
                     }
 
             ConfirmDelete td ->
                 Confirm.view
-                    { title =
-                        h2
-                            [ c "warningTitle" ]
-                            [ text "Are you sure you want to delete?" ]
-                    , buttons =
-                        [ closeConfirmWindowButtonView
-                        , button
-                            [ class "button"
-                            , c "warningButton"
-                            , onClick (ConfirmedDelete td)
-                            , type_ "button"
-                            ]
-                            [ text "Delete" ]
-                        ]
-                    , handleClose = ClosedConfirmWindow
+                    { title = "Are you sure you want to delete?"
+                    , cancelButton = closeConfirmWindowButton
+                    , okButton =
+                        Just
+                            { title = "Delete"
+                            , handleClick = ConfirmedDelete td
+                            }
                     }
         ]
 

@@ -1,7 +1,7 @@
 import signedIn from './sentFromElm/signedIn'
 import updatedTransactions from './sentFromElm/updatedTransactions'
 
-export default (app: ElmApp) =>
+export default (app: ElmApp, updateSW: () => void) =>
   ({ msg, payload }: { msg: SentFromElmMsg; payload: string }): void => {
     switch (msg) {
       case 'updatedTransactions':
@@ -9,6 +9,9 @@ export default (app: ElmApp) =>
         break
       case 'signedIn':
         signedIn(app, payload)
+        break
+      case 'refreshAppClicked':
+        updateSW()
         break
     }
   }

@@ -6,6 +6,8 @@
 
 @import './global.css';
 
+@import './animations.css';
+
 /* css components */
 
 @import './button.css';

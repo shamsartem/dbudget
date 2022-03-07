@@ -31,6 +31,8 @@ type alias Store =
     , signedInData : Maybe SignedInData
     , deviceName : String
     , windowWidth : Int
+    , isRefreshWindowVisible : Bool
+    , isOfflineReadyWindowVisible : Bool
     }
 
 

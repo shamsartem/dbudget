@@ -4,6 +4,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  animation: appear 0.3s ease-in-out forwards;
   background-color: var(--c-gray-1-8);
   text-align: center;
 
@@ -47,6 +48,15 @@
     border: 1px solid var(--c-gray-5);
     background-color: var(--c-gray-1);
     border-radius: var(--bdrs-md);
+  }
+
+  &_title {
+    margin-bottom: 15px;
+    font-weight: var(--fw-bold);
+  }
+
+  &_button {
+    width: 100%;
   }
 
   &_buttons {
