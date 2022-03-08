@@ -12,6 +12,8 @@ import Port
 import Prng.Uuid
 import Route exposing (Route(..))
 import Store exposing (Store)
+import Task
+import Time
 import Url exposing (Url)
 import UuidSeed exposing (UuidSeed)
 import View.Confirm as Confirm
@@ -51,6 +53,7 @@ initialModel maybeSeed { seedAndExtension, deviceName, windowWidth } url key =
             , windowWidth = windowWidth
             , isRefreshWindowVisible = False
             , isOfflineReadyWindowVisible = False
+            , currentTimeZone = Time.utc
             }
     in
     case Route.fromUrl url of
@@ -63,7 +66,10 @@ initialModel maybeSeed { seedAndExtension, deviceName, windowWidth } url key =
                     SignIn.init store
             in
             ( SignIn signInModel
-            , Cmd.map GotSignInMsg signInCommand
+            , Cmd.batch
+                [ Cmd.map GotSignInMsg signInCommand
+                , Task.perform GotTimeZone Time.here
+                ]
             )
 
 
@@ -164,6 +170,7 @@ type Msg
     | OkOfflineReadyClicked
     | RefreshClicked
     | CancelRefreshClicked
+    | GotTimeZone Time.Zone
 
 
 getStore : Model -> Store
@@ -338,6 +345,13 @@ update message model =
         ( CancelRefreshClicked, _ ) ->
             ( setStore
                 { store | isRefreshWindowVisible = False }
+                model
+            , Cmd.none
+            )
+
+        ( GotTimeZone zone, _ ) ->
+            ( setStore
+                { store | currentTimeZone = zone }
                 model
             , Cmd.none
             )

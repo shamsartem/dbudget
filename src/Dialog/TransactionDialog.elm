@@ -14,11 +14,15 @@ module Dialog.TransactionDialog exposing
 
 import Browser.Dom exposing (focus)
 import Browser.Events exposing (onKeyDown)
+import Cldr.Format.DateTime as DateTime
+import Cldr.Format.Length as Length
+import Cldr.Locale as Locale
 import Cred
 import Dict
 import Html exposing (..)
-import Html.Attributes exposing (class, disabled, id, novalidate, type_)
+import Html.Attributes exposing (attribute, class, datetime, disabled, for, id, novalidate, type_)
 import Html.Events exposing (onClick, onSubmit)
+import Iso8601
 import Json.Decode as Decode
 import Numeric.Decimal as Decimal
 import Numeric.Nat as Nat exposing (Nat)
@@ -59,7 +63,6 @@ type alias DialogData =
     { transactionData : Transaction.Data
     , dirtyRecord : DirtyRecord
     , isButtonsDisabled : Bool
-    , currentTimeZone : Maybe Time.Zone
     , filteredBasedOnIsIncome : List Transaction.Data
     , filteredByCategory : List Transaction.Data
     , categories : List String
@@ -283,7 +286,6 @@ init initType store signedInData =
                 , currency = isDirty
                 }
             , isButtonsDisabled = False
-            , currentTimeZone = Nothing
             , filteredBasedOnIsIncome = filteredBasedOnIsIncome
             , filteredByCategory = filteredByCategory
             , categories = getCategories filteredBasedOnIsIncome transactionData
@@ -328,10 +330,7 @@ init initType store signedInData =
       , signedInData = signedInData
       , dialog = dialog
       }
-    , Cmd.batch
-        [ Task.attempt (\_ -> NoOp) (focus closeButtonId)
-        , Task.perform GotTimeZone Time.here
-        ]
+    , Task.attempt (\_ -> NoOp) (focus closeButtonId)
     )
 
 
@@ -408,88 +407,42 @@ viewMessage message =
         ]
 
 
-monthToString : Time.Month -> String
-monthToString month =
-    case month of
-        Time.Jan ->
-            "Jan"
-
-        Time.Feb ->
-            "Feb"
-
-        Time.Mar ->
-            "Mar"
-
-        Time.Apr ->
-            "Apr"
-
-        Time.May ->
-            "May"
-
-        Time.Jun ->
-            "Jun"
-
-        Time.Jul ->
-            "Jul"
-
-        Time.Aug ->
-            "Aug"
-
-        Time.Sep ->
-            "Sep"
-
-        Time.Oct ->
-            "Oct"
-
-        Time.Nov ->
-            "Nov"
-
-        Time.Dec ->
-            "Dec"
-
-
-viewLastUpdated : Dialog -> Maybe Time.Zone -> Posix -> Html Msg
+viewLastUpdated : Dialog -> Time.Zone -> Posix -> Html Msg
 viewLastUpdated dialog currentTimeZone lastUpdated =
     let
         lastUpdatedText =
-            \() ->
-                case currentTimeZone of
-                    Just zone ->
-                        div [ c "lastUpdated" ]
-                            [ text
-                                ("Last updated: "
-                                    ++ String.fromInt (Time.toDay zone lastUpdated)
-                                    ++ " "
-                                    ++ monthToString (Time.toMonth zone lastUpdated)
-                                    ++ " "
-                                    ++ String.fromInt (Time.toYear zone lastUpdated)
-                                    ++ " "
-                                    ++ String.fromInt (Time.toHour zone lastUpdated)
-                                    ++ ":"
-                                    ++ String.fromInt (Time.toMinute zone lastUpdated)
-                                    ++ ":"
-                                    ++ String.fromInt (Time.toSecond zone lastUpdated)
-                                )
-                            ]
-
-                    Nothing ->
-                        text ""
+            div [ c "lastUpdated" ]
+                [ text "Last updated: "
+                , time [ datetime (Iso8601.fromTime lastUpdated) ]
+                    [ text
+                        (DateTime.format
+                            (DateTime.DateAndTime
+                                { date = Length.Medium
+                                , time = Length.Medium
+                                }
+                            )
+                            Locale.en_GB
+                            currentTimeZone
+                            lastUpdated
+                        )
+                    ]
+                ]
     in
     case dialog of
         InvalidTransaction _ ->
-            lastUpdatedText ()
+            lastUpdatedText
 
         NewTransaction _ ->
             text ""
 
         EditTransaction _ ->
-            lastUpdatedText ()
+            lastUpdatedText
 
         NoTransactionWithThisId ->
             text ""
 
         TransactionIsDeleted ->
-            lastUpdatedText ()
+            lastUpdatedText
 
 
 getError : Transaction.Transactions -> Transaction.Data -> Transaction.Field -> Maybe String
@@ -614,7 +567,7 @@ viewTransactionForm dialogData dialog model leftButton =
         { transactions } =
             model.signedInData
 
-        { transactionData, dirtyRecord, isButtonsDisabled, currentTimeZone, categories, names, currencies, accounts, confirmType } =
+        { transactionData, dirtyRecord, isButtonsDisabled, categories, names, currencies, accounts, confirmType } =
             dialogData
 
         buttons =
@@ -669,6 +622,21 @@ viewTransactionForm dialogData dialog model leftButton =
                     transactions
                     transactionData
             }
+
+        isIncomeId =
+            "isIncome"
+
+        priceId =
+            "price"
+
+        amountId =
+            "amount"
+
+        currencyId =
+            "currency"
+
+        outputFor =
+            String.join " " [ isIncomeId, priceId, amountId, currencyId ]
     in
     div [ class baseClass, class "fullSize", id dialogId ]
         [ button [ c "closeButton", id closeButtonId, onClick ClosedDialog ]
@@ -682,7 +650,7 @@ viewTransactionForm dialogData dialog model leftButton =
                     , onCheck = SetIsIncome
                     , checked = transactionData.isIncome
                     , required = False
-                    , id = "isIncome"
+                    , id = isIncomeId
                     , otherAttributes = []
                     }
                 ]
@@ -731,9 +699,9 @@ viewTransactionForm dialogData dialog model leftButton =
                 , onBlur = Just (BluredFromField Transaction.Price)
                 , value = transactionData.price
                 , required = True
-                , id = "price"
+                , id = priceId
                 , hasPlaceholder = False
-                , otherAttributes = [ c "input" ]
+                , otherAttributes = [ c "input", attribute "inputmode" "tel" ]
                 , textUnderInput = textsUnderInputs.price
                 , dirty = dirtyRecord.price
                 , maybeDatalist = Nothing
@@ -744,9 +712,9 @@ viewTransactionForm dialogData dialog model leftButton =
                 , onBlur = Just (BluredFromField Transaction.Amount)
                 , value = transactionData.amount
                 , required = False
-                , id = "amount"
+                , id = amountId
                 , hasPlaceholder = False
-                , otherAttributes = [ c "input" ]
+                , otherAttributes = [ c "input", attribute "inputmode" "tel" ]
                 , textUnderInput = Input.Error (error Transaction.Amount)
                 , dirty = dirtyRecord.amount
                 , maybeDatalist = Nothing
@@ -770,7 +738,7 @@ viewTransactionForm dialogData dialog model leftButton =
                 , onBlur = Just (BluredFromField Transaction.Currency)
                 , value = transactionData.currency
                 , required = True
-                , id = "currency"
+                , id = currencyId
                 , hasPlaceholder = False
                 , otherAttributes =
                     [ disabled
@@ -796,7 +764,7 @@ viewTransactionForm dialogData dialog model leftButton =
                 }
             , case error Transaction.FullPrice of
                 Nothing ->
-                    div [ c "fullPrice" ]
+                    output [ c "fullPrice", for outputFor ]
                         [ case
                             Transaction.getFullPrice
                                 transactionData
@@ -811,9 +779,10 @@ viewTransactionForm dialogData dialog model leftButton =
                         ]
 
                 Just errorText ->
-                    div [ c "fullPrice", c "fullPrice__error" ] [ text errorText ]
+                    output [ c "fullPrice", c "fullPrice__error", for outputFor ]
+                        [ text errorText ]
             , buttons
-            , viewLastUpdated dialog currentTimeZone transactionData.lastUpdated
+            , viewLastUpdated dialog model.store.currentTimeZone transactionData.lastUpdated
             ]
         , case confirmType of
             NoConfirm ->
@@ -858,7 +827,6 @@ type Msg
     | DeleteClicked
     | ConfirmedDelete Transaction.Data
     | NoOp
-    | GotTimeZone Time.Zone
     | ClosedConfirmWindow
 
 
@@ -962,15 +930,6 @@ update msg model =
             ( updateDialog
                 (\dd ->
                     { dd | confirmType = NoConfirm }
-                )
-                model
-            , Cmd.none
-            )
-
-        GotTimeZone zone ->
-            ( updateDialog
-                (\dd ->
-                    { dd | currentTimeZone = Just zone }
                 )
                 model
             , Cmd.none

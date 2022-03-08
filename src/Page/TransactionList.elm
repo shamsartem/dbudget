@@ -12,10 +12,15 @@ module Page.TransactionList exposing
     , view
     )
 
+import Cldr.Format.Date as FormatDate
+import Cldr.Format.Length as Length
+import Cldr.Locale as Locale
+import Date
 import Dialog.TransactionDialog as TransactionDialog
 import Html exposing (..)
-import Html.Attributes exposing (attribute, class, classList, id, style)
+import Html.Attributes exposing (attribute, class, classList, datetime, id, style)
 import InfiniteList
+import Iso8601
 import Prng.Uuid exposing (Uuid)
 import Result exposing (Result(..))
 import Route exposing (Route(..))
@@ -240,7 +245,11 @@ getMessageView { allTransactions, filteredAndSortedTransactions } =
 
 
 viewTransactions : Model -> Html Msg
-viewTransactions { filteredAndSortedTransactions, infList } =
+viewTransactions model =
+    let
+        { filteredAndSortedTransactions, infList } =
+            model
+    in
     div
         [ c "infList", InfiniteList.onScroll InfListMsg ]
         [ InfiniteList.view
@@ -337,27 +346,43 @@ headerView search isPlaceholder =
 
 
 transactionItemView : DisplayedTransaction -> Html Msg
-transactionItemView { date, category, name, price, id, isIncome } =
+transactionItemView { date, category, account, name, price, id, isIncome } =
     div
         [ c "item"
         , style "height" (String.fromInt itemHeight ++ "px")
         , classList [ ( cl "item__isIncome", isIncome ) ]
         ]
         [ div [ c "itemSection" ]
-            [ div [] [ text date ]
-            , div [] [ text category ]
+            [ div [ c "itemValue" ] [ text name ]
+            , time [ datetime date, c "itemValue", c "itemValue__time" ]
+                [ text
+                    (case Date.fromIsoString date of
+                        Ok d ->
+                            FormatDate.format
+                                (FormatDate.WithLength Length.Medium)
+                                Locale.en_GB
+                                d
+
+                        -- should never happen because we validate
+                        Err _ ->
+                            "Invalid date"
+                    )
+                ]
             ]
         , div [ c "itemSection" ]
-            [ div [] [ text name ]
-            , div [] [ text price ]
+            [ div [ c "itemValue" ] [ text category ]
+            , div [ c "itemValue", c "itemValue__account" ] [ text account ]
+            , div [ c "itemValue", c "itemValue__price" ] [ text price ]
             ]
         , a [ Route.href (Route.Transaction id), c "itemLink" ]
             [ div
                 [ class "visuallyHidden" ]
                 [ text
                     (String.join " "
-                        [ name
+                        [ "Edit:"
+                        , name
                         , price
+                        , account
                         , date
                         , category
                         ]

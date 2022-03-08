@@ -64,7 +64,7 @@
     flex-direction: column;
     align-items: center;
     justify-content: space-between;
-    padding: var(--space-md);
+    padding: var(--space-md) 0;
     border-bottom: 1px solid var(--c-gray-4);
     margin: 0 auto;
 
@@ -76,7 +76,26 @@
   &_itemSection {
     display: flex;
     width: 100%;
-    justify-content: space-between;
+  }
+
+  &_itemValue {
+    overflow: hidden;
+    padding: 0 var(--space-md);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+
+    &__account {
+      margin-left: auto;
+    }
+
+    &__price {
+      flex-shrink: 0;
+    }
+
+    &__time {
+      flex-shrink: 0;
+      margin-left: auto;
+    }
   }
 
   &_itemLink {
