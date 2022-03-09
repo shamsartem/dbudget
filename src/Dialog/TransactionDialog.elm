@@ -20,7 +20,7 @@ import Cldr.Locale as Locale
 import Cred
 import Dict
 import Html exposing (..)
-import Html.Attributes exposing (attribute, class, datetime, disabled, for, id, novalidate, type_)
+import Html.Attributes exposing (attribute, class, datetime, disabled, for, id, novalidate, tabindex, type_)
 import Html.Events exposing (onClick, onSubmit)
 import Iso8601
 import Json.Decode as Decode
@@ -799,25 +799,37 @@ viewTransactionForm dialogData dialog model leftButton =
                 }
             , case error Transaction.FullPrice of
                 Nothing ->
-                    output [ c "fullPrice", for outputFor ]
-                        [ case
-                            Transaction.getFullPrice
-                                transactionData
-                                (Transaction.getDecimalsDict transactions)
-                          of
-                            Ok fullPrice ->
-                                text fullPrice
+                    div [ c "fullPriceContainer" ]
+                        [ output
+                            [ c "fullPrice", for outputFor ]
+                            [ case
+                                Transaction.getFullPrice
+                                    transactionData
+                                    (Transaction.getDecimalsDict transactions)
+                              of
+                                Ok fullPrice ->
+                                    text fullPrice
 
-                            -- dont show full price if Price and/or Amount fields are invalid
-                            Err _ ->
-                                text ""
+                                -- dont show full price if Price and/or Amount fields are invalid
+                                Err _ ->
+                                    text ""
+                            ]
                         ]
 
                 Just errorText ->
-                    output [ c "fullPrice", c "fullPrice__error", for outputFor ]
-                        [ text errorText ]
+                    div [ c "fullPriceContainer" ]
+                        [ output
+                            [ c "fullPrice"
+                            , c "fullPrice__error"
+                            , for outputFor
+                            , tabindex 0
+                            ]
+                            [ text errorText ]
+                        ]
             , buttons
-            , viewLastUpdated dialog model.store.currentTimeZone transactionData.lastUpdated
+            , viewLastUpdated dialog
+                model.store.currentTimeZone
+                transactionData.lastUpdated
             ]
         , case confirmType of
             NoConfirm ->
@@ -1280,7 +1292,11 @@ update msg model =
                     in
                     { cleanTransaction | isDeleted = True }
             in
-            ( model, getTime (GotTimeNowBeforeSave deletedTransaction) )
+            ( updateDialog
+                (\dd -> { dd | isButtonsDisabled = True })
+                model
+            , getTime (GotTimeNowBeforeSave deletedTransaction)
+            )
 
         GotTimeNowBeforeSave transactionData lastUpdated ->
             case Transaction.getTransaction transactions { transactionData | lastUpdated = lastUpdated } of

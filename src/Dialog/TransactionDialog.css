@@ -83,12 +83,38 @@
     margin-bottom: 10px;
   }
 
-  &_fullPrice {
+  &_fullPriceContainer {
+    position: relative;
+    width: 100%;
     height: 20px;
+    min-height: 20px;
     margin-top: 10px;
+  }
+
+  &_fullPrice {
+    display: block;
+    overflow: hidden;
+    width: 100%;
+    height: 20px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 
     &__error {
       color: var(--c-danger);
+
+      &:focus,
+      &:hover {
+        position: absolute;
+        z-index: 1;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: auto;
+        background-color: var(--c-gray-1);
+        border-radius: var(--bdrs-sm);
+        outline: 1px solid var(--c-danger);
+        white-space: normal;
+      }
     }
   }
 
