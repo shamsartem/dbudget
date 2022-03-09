@@ -20,7 +20,6 @@ import Dialog.TransactionDialog as TransactionDialog
 import Html exposing (..)
 import Html.Attributes exposing (attribute, class, classList, datetime, id, style)
 import InfiniteList
-import Iso8601
 import Prng.Uuid exposing (Uuid)
 import Result exposing (Result(..))
 import Route exposing (Route(..))

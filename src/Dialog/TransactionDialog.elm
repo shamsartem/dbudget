@@ -561,6 +561,29 @@ isCurrencyDisabled dialog { account } transactions =
             Dict.member account (Transaction.getAccountsDict transactions)
 
 
+calcInputView : String -> Html msg -> Html msg
+calcInputView id inputV =
+    div [ c "inputWrapper" ]
+        [ inputV
+        , button
+            [ type_ "button"
+            , class "button"
+            , c "inputButton"
+            , attribute "data-for-calc-input" id
+            , attribute "data-plus" ""
+            ]
+            [ text "+" ]
+        , button
+            [ type_ "button"
+            , class "button"
+            , c "inputButton"
+            , attribute "data-for-calc-input" id
+            , attribute "data-minus" ""
+            ]
+            [ text "-" ]
+        ]
+
+
 viewTransactionForm : DialogData -> Dialog -> Model -> Html Msg -> Html Msg
 viewTransactionForm dialogData dialog model leftButton =
     let
@@ -693,32 +716,44 @@ viewTransactionForm dialogData dialog model leftButton =
                 , dirty = dirtyRecord.name
                 , maybeDatalist = Just names
                 }
-            , Input.view
-                { label = "Price"
-                , onInput = SetField Transaction.Price
-                , onBlur = Just (BluredFromField Transaction.Price)
-                , value = transactionData.price
-                , required = True
-                , id = priceId
-                , hasPlaceholder = False
-                , otherAttributes = [ c "input", attribute "inputmode" "tel" ]
-                , textUnderInput = textsUnderInputs.price
-                , dirty = dirtyRecord.price
-                , maybeDatalist = Nothing
-                }
-            , Input.view
-                { label = "Amount"
-                , onInput = SetField Transaction.Amount
-                , onBlur = Just (BluredFromField Transaction.Amount)
-                , value = transactionData.amount
-                , required = False
-                , id = amountId
-                , hasPlaceholder = False
-                , otherAttributes = [ c "input", attribute "inputmode" "tel" ]
-                , textUnderInput = Input.Error (error Transaction.Amount)
-                , dirty = dirtyRecord.amount
-                , maybeDatalist = Nothing
-                }
+            , calcInputView priceId
+                (Input.view
+                    { label = "Price"
+                    , onInput = SetField Transaction.Price
+                    , onBlur = Just (BluredFromField Transaction.Price)
+                    , value = transactionData.price
+                    , required = True
+                    , id = priceId
+                    , hasPlaceholder = False
+                    , otherAttributes =
+                        [ c "input"
+                        , attribute "inputmode" "decimal"
+                        , attribute "data-calc-input" ""
+                        ]
+                    , textUnderInput = textsUnderInputs.price
+                    , dirty = dirtyRecord.price
+                    , maybeDatalist = Nothing
+                    }
+                )
+            , calcInputView amountId
+                (Input.view
+                    { label = "Amount"
+                    , onInput = SetField Transaction.Amount
+                    , onBlur = Just (BluredFromField Transaction.Amount)
+                    , value = transactionData.amount
+                    , required = False
+                    , id = amountId
+                    , hasPlaceholder = False
+                    , otherAttributes =
+                        [ c "input"
+                        , attribute "inputmode" "decimal"
+                        , attribute "data-calc-input" ""
+                        ]
+                    , textUnderInput = Input.Error (error Transaction.Amount)
+                    , dirty = dirtyRecord.amount
+                    , maybeDatalist = Nothing
+                    }
+                )
             , Input.view
                 { label = "Description"
                 , onInput = SetField Transaction.Description

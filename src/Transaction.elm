@@ -124,8 +124,6 @@ parseSum string numberOfDecimalsFromDB =
 
             numberStrings =
                 string
-                    |> String.replace " " ""
-                    |> String.replace "," "."
                     |> String.replace "+" " +"
                     |> String.replace "-" " -"
                     |> String.trim
@@ -701,9 +699,11 @@ listOfRowsToTransactionsDict uuidSeed timeNow listOfRows =
 
                 price =
                     getStringWithdefault 4 .price
+                        |> String.replace " " ""
 
                 rawAmount =
                     getStringWithdefault 5 .amount
+                        |> String.replace " " ""
 
                 amount =
                     if rawAmount == "1" then

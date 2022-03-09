@@ -4,6 +4,7 @@ import getElmMessageHandler from './ports/getElmMessageHandler'
 import './styles/common.css'
 import sendToElm from './ports/sendToElm'
 import { registerSW } from 'virtual:pwa-register'
+import './calcInput'
 
 declare global {
   interface Window {
