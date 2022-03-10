@@ -70,6 +70,7 @@ type alias DialogData =
     , currencies : List String
     , accounts : List String
     , confirmType : ConfirmType
+    , confirms : List ConfirmType
     }
 
 
@@ -293,6 +294,7 @@ init initType store signedInData =
             , currencies = getCurrencies notDeletedTransactionDataList transactionData
             , accounts = getAccounts notDeletedTransactionDataList transactionData
             , confirmType = NoConfirm
+            , confirms = []
             }
 
         ( dialog, newStore ) =
@@ -499,9 +501,7 @@ getTextUnderInputForCurrency currencies transactions transactionData =
         Transaction.Currency
         ("\""
             ++ transactionData.currency
-            ++ "\" will be added as a new currency with "
-            ++ (transactionData.price |> getNewDecimals |> getNewDecimalsString)
-            ++ " decimal places"
+            ++ "\" will be added as a new Currency"
         )
         (not (List.member transactionData.currency currencies))
 
@@ -1105,7 +1105,16 @@ update msg model =
                                             currency
                             }
                         )
-                        Nothing
+                        (Just
+                            (\dd ->
+                                { dd
+                                    | accounts =
+                                        getAccounts
+                                            notDeletedTransactionDataList
+                                            dd.transactionData
+                                }
+                            )
+                        )
 
                 Transaction.FullPrice ->
                     ( model, Cmd.none )
@@ -1148,66 +1157,58 @@ update msg model =
             case
                 ( getDialogDataField .transactionData dialog
                 , getDialogDataField .currencies dialog
+                , getDialogDataField .accounts dialog
                 )
             of
-                ( Just transactionData, Just currencies ) ->
+                ( Just transactionData, Just currencies, Just accounts ) ->
                     case Transaction.getTransaction transactions transactionData of
                         Just _ ->
                             let
-                                checkForWarnings : Input.TextUnderInput -> Maybe Input.TextUnderInput -> ( Model, Cmd Msg )
-                                checkForWarnings textUnderInput maybeAnotherTextUnderInput =
-                                    case textUnderInput of
-                                        Input.Warning (Just text) ->
-                                            ( updateDialog
-                                                (\dd ->
-                                                    { dd
-                                                        | confirmType =
-                                                            ConfirmUpdateCurrency
-                                                                transactionData
-                                                                text
-                                                    }
-                                                )
-                                                model
-                                            , Cmd.none
-                                            )
-
-                                        Input.Warning Nothing ->
-                                            case maybeAnotherTextUnderInput of
-                                                Just t ->
-                                                    checkForWarnings t Nothing
-
-                                                Nothing ->
-                                                    ( model
-                                                    , Task.succeed transactionData
-                                                        |> Task.perform ConfirmedSave
-                                                    )
-
-                                        -- currency input deffinetly has space for text
-                                        -- under input
-                                        Input.NoText ->
-                                            ( model, Cmd.none )
-
-                                        -- input with warning should never come to this state
-                                        -- see getTextUnderInput
-                                        Input.Error Nothing ->
-                                            ( model, Cmd.none )
-
-                                        -- should never happen because we already validated transaction
-                                        Input.Error (Just _) ->
-                                            ( model, Cmd.none )
-                            in
-                            checkForWarnings
-                                (getTextUnderInputForCurrency
-                                    currencies
-                                    transactions
-                                    transactionData
-                                )
-                                (Just
-                                    (getTextUnderInputForPrice
+                                confirms =
+                                    [ getTextUnderInputForCurrency
+                                        currencies
                                         transactions
                                         transactionData
+                                    , getTextUnderInputForPrice
+                                        transactions
+                                        transactionData
+                                    , getTextUnderInputForAccount
+                                        accounts
+                                        transactions
+                                        transactionData
+                                    ]
+                                        |> List.filterMap
+                                            (\textUnderInput ->
+                                                case textUnderInput of
+                                                    Input.Warning (Just text) ->
+                                                        Just
+                                                            (ConfirmUpdateCurrency
+                                                                transactionData
+                                                                text
+                                                            )
+
+                                                    _ ->
+                                                        Nothing
+                                            )
+                            in
+                            case List.head confirms of
+                                Nothing ->
+                                    ( model
+                                    , Task.succeed transactionData
+                                        |> Task.perform ConfirmedSave
                                     )
-                                )
+
+                                Just confirm ->
+                                    ( updateDialog
+                                        (\dd ->
+                                            { dd
+                                                | confirmType = confirm
+                                                , confirms = List.drop 1 confirms
+                                            }
+                                        )
+                                        model
+                                    , Cmd.none
+                                    )
 
                         -- show all errors and do not save if transaction is invalid
                         Nothing ->
@@ -1233,27 +1234,47 @@ update msg model =
                     ( model, Cmd.none )
 
         ConfirmedSave transactionData ->
-            let
-                getTrimmed get =
-                    transactionData |> get |> String.trim
+            case getDialogDataField .confirms dialog of
+                Just confirms ->
+                    case List.head confirms of
+                        Just confirm ->
+                            ( updateDialog
+                                (\dd ->
+                                    { dd
+                                        | confirmType = confirm
+                                        , confirms = List.drop 1 confirms
+                                    }
+                                )
+                                model
+                            , Cmd.none
+                            )
 
-                trimmedTransactionData : Transaction.Data
-                trimmedTransactionData =
-                    { transactionData
-                        | date = getTrimmed .date
-                        , category = getTrimmed .category
-                        , name = getTrimmed .name
-                        , price = getTrimmed .price
-                        , amount = getTrimmed .amount
-                        , description = getTrimmed .description
-                        , currency = getTrimmed .currency
-                    }
-            in
-            ( updateDialog
-                (\dd -> { dd | isButtonsDisabled = True })
-                model
-            , getTime (GotTimeNowBeforeSave trimmedTransactionData)
-            )
+                        Nothing ->
+                            let
+                                getTrimmed get =
+                                    transactionData |> get |> String.trim
+
+                                trimmedTransactionData : Transaction.Data
+                                trimmedTransactionData =
+                                    { transactionData
+                                        | date = getTrimmed .date
+                                        , category = getTrimmed .category
+                                        , name = getTrimmed .name
+                                        , price = getTrimmed .price
+                                        , amount = getTrimmed .amount
+                                        , description = getTrimmed .description
+                                        , currency = getTrimmed .currency
+                                    }
+                            in
+                            ( updateDialog
+                                (\dd -> { dd | isButtonsDisabled = True })
+                                model
+                            , getTime (GotTimeNowBeforeSave trimmedTransactionData)
+                            )
+
+                -- ConfirmedSave should never happen on dialog with no data
+                Nothing ->
+                    ( model, Cmd.none )
 
         DeleteClicked ->
             case dialog of
