@@ -10,20 +10,22 @@ import Html.Attributes
         ( attribute
         , class
         , classList
+        , disabled
         , for
         , id
         , placeholder
         , required
         , tabindex
         , title
+        , type_
         , value
         )
 import Html.Events
     exposing
         ( onBlur
+        , onClick
         , onInput
         )
-import Html.Keyed as Keyed
 import Utils
 
 
@@ -45,6 +47,7 @@ type alias Config msg =
     , value : String
     , textUnderInput : TextUnderInput
     , maybeDatalist : Maybe (List String)
+    , hasClearButton : Bool
     }
 
 
@@ -61,11 +64,6 @@ cl elementAndOrModifier =
 c : String -> Attribute msg
 c elementAndOrModifier =
     class (cl elementAndOrModifier)
-
-
-textDivKey : String
-textDivKey =
-    "3"
 
 
 view : Config msg -> Html msg
@@ -135,6 +133,9 @@ view config =
                             _ ->
                                 False
                       )
+                    , ( cl "input__hasClearButton"
+                      , config.hasClearButton
+                      )
                     ]
                 , onInput config.onInput
                 , value config.value
@@ -149,7 +150,7 @@ view config =
         datalistId =
             config.id ++ "-datalist"
 
-        optinalattributepairs =
+        optinalAttributePairs =
             [ ( config.hasPlaceholder
               , placeholder config.label
               )
@@ -167,7 +168,7 @@ view config =
         inputattributes =
             let
                 attrs =
-                    optinalattributepairs
+                    optinalAttributePairs
                         |> List.filter
                             (\( bool, _ ) ->
                                 bool
@@ -185,41 +186,54 @@ view config =
                 Just blurhandler ->
                     onBlur blurhandler :: attrs
 
-        inputhtml =
-            [ ( "1"
-              , viewlabel
-              )
-            , ( "2", input inputattributes [] )
-            ]
+        clearButtonView =
+            if config.hasClearButton then
+                button
+                    [ type_ "button"
+                    , c "clearButton"
+                    , onClick (config.onInput "")
+                    , disabled
+                        (List.any
+                            (\at -> at == disabled True)
+                            config.otherAttributes
+                        )
+                    ]
+                    [ div
+                        [ class "visuallyHidden" ]
+                        [ text ("clear" ++ config.label ++ " field") ]
+                    ]
+
+            else
+                text ""
+
+        viewInput =
+            div [ c "inputContainer" ]
+                [ input inputattributes []
+                , clearButtonView
+                ]
 
         getEmptyTextUnderInput className =
-            [ ( textDivKey
-              , div [ c "textUnderInputContainer" ]
-                    [ div
-                        [ class className
-                        ]
-                        []
+            div [ c "textUnderInputContainer" ]
+                [ div
+                    [ class className
                     ]
-              )
-            ]
+                    []
+                ]
 
         getTextUnderInput t className =
-            [ ( textDivKey
-              , div [ c "textUnderInputContainer" ]
-                    [ div
-                        [ class className
-                        , id errorOrWarningId
-                        , tabindex 0
-                        ]
-                        [ text t ]
+            div [ c "textUnderInputContainer" ]
+                [ div
+                    [ class className
+                    , id errorOrWarningId
+                    , tabindex 0
                     ]
-              )
-            ]
+                    [ text t ]
+                ]
 
         textUnderInput =
             case config.textUnderInput of
                 NoText ->
-                    [ ( textDivKey, div [] [] ) ]
+                    text ""
 
                 Error maybeError ->
                     case maybeError of
@@ -271,24 +285,16 @@ view config =
         dataListView =
             case config.maybeDatalist of
                 Nothing ->
-                    []
+                    text ""
 
                 Just list ->
-                    [ ( "4"
-                      , datalist
-                            [ id datalistId ]
-                            (List.map
-                                (\item -> option [ value item ] [])
-                                (List.take 17 list)
-                            )
-                      )
-                    ]
+                    datalist
+                        [ id datalistId ]
+                        (List.map
+                            (\item -> option [ value item ] [])
+                            (List.take 17 list)
+                        )
     in
-    Keyed.node "div"
+    div
         [ class baseClass ]
-        (List.concat
-            [ inputhtml
-            , textUnderInput
-            , dataListView
-            ]
-        )
+        [ viewlabel, viewInput, textUnderInput, dataListView ]

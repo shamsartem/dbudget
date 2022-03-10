@@ -584,6 +584,40 @@ calcInputView id inputV =
         ]
 
 
+getId : Transaction.Field -> String
+getId field =
+    case field of
+        Transaction.Date ->
+            "date"
+
+        Transaction.Category ->
+            "category"
+
+        Transaction.Name ->
+            "name"
+
+        Transaction.Price ->
+            "price"
+
+        Transaction.Amount ->
+            "amount"
+
+        Transaction.Description ->
+            "description"
+
+        Transaction.Currency ->
+            "currency"
+
+        Transaction.Account ->
+            "account"
+
+        Transaction.FullPrice ->
+            "fullPrice"
+
+        Transaction.IsIncome ->
+            "isIncome"
+
+
 viewTransactionForm : DialogData -> Dialog -> Model -> Html Msg -> Html Msg
 viewTransactionForm dialogData dialog model leftButton =
     let
@@ -646,20 +680,13 @@ viewTransactionForm dialogData dialog model leftButton =
                     transactionData
             }
 
-        isIncomeId =
-            "isIncome"
-
-        priceId =
-            "price"
-
-        amountId =
-            "amount"
-
-        currencyId =
-            "currency"
-
         outputFor =
-            String.join " " [ isIncomeId, priceId, amountId, currencyId ]
+            String.join " "
+                [ getId Transaction.IsIncome
+                , getId Transaction.Price
+                , getId Transaction.Amount
+                , getId Transaction.Currency
+                ]
     in
     div [ class baseClass, class "fullSize", id dialogId ]
         [ button [ c "closeButton", id closeButtonId, onClick ClosedDialog ]
@@ -673,7 +700,7 @@ viewTransactionForm dialogData dialog model leftButton =
                     , onCheck = SetIsIncome
                     , checked = transactionData.isIncome
                     , required = False
-                    , id = isIncomeId
+                    , id = getId Transaction.IsIncome
                     , otherAttributes = []
                     }
                 ]
@@ -683,12 +710,13 @@ viewTransactionForm dialogData dialog model leftButton =
                 , onBlur = Just (BluredFromField Transaction.Date)
                 , value = transactionData.date
                 , required = True
-                , id = "date"
+                , id = getId Transaction.Date
                 , hasPlaceholder = False
                 , otherAttributes = [ type_ "date", c "input" ]
                 , textUnderInput = Input.Error (error Transaction.Date)
                 , dirty = dirtyRecord.date
                 , maybeDatalist = Nothing
+                , hasClearButton = False
                 }
             , Input.view
                 { label = "Category"
@@ -696,12 +724,13 @@ viewTransactionForm dialogData dialog model leftButton =
                 , onBlur = Just (BluredFromField Transaction.Category)
                 , value = transactionData.category
                 , required = True
-                , id = "category"
+                , id = getId Transaction.Category
                 , hasPlaceholder = False
                 , otherAttributes = [ c "input" ]
                 , textUnderInput = textsUnderInputs.category
                 , dirty = dirtyRecord.category
                 , maybeDatalist = Just categories
+                , hasClearButton = True
                 }
             , Input.view
                 { label = "Name"
@@ -709,21 +738,22 @@ viewTransactionForm dialogData dialog model leftButton =
                 , onBlur = Just (BluredFromField Transaction.Name)
                 , value = transactionData.name
                 , required = True
-                , id = "name"
+                , id = getId Transaction.Name
                 , hasPlaceholder = False
                 , otherAttributes = [ c "input" ]
                 , textUnderInput = textsUnderInputs.name
                 , dirty = dirtyRecord.name
                 , maybeDatalist = Just names
+                , hasClearButton = True
                 }
-            , calcInputView priceId
+            , calcInputView (getId Transaction.Price)
                 (Input.view
                     { label = "Price"
                     , onInput = SetField Transaction.Price
                     , onBlur = Just (BluredFromField Transaction.Price)
                     , value = transactionData.price
                     , required = True
-                    , id = priceId
+                    , id = getId Transaction.Price
                     , hasPlaceholder = False
                     , otherAttributes =
                         [ c "input"
@@ -733,16 +763,17 @@ viewTransactionForm dialogData dialog model leftButton =
                     , textUnderInput = textsUnderInputs.price
                     , dirty = dirtyRecord.price
                     , maybeDatalist = Nothing
+                    , hasClearButton = False
                     }
                 )
-            , calcInputView amountId
+            , calcInputView (getId Transaction.Amount)
                 (Input.view
                     { label = "Amount"
                     , onInput = SetField Transaction.Amount
                     , onBlur = Just (BluredFromField Transaction.Amount)
                     , value = transactionData.amount
                     , required = False
-                    , id = amountId
+                    , id = getId Transaction.Amount
                     , hasPlaceholder = False
                     , otherAttributes =
                         [ c "input"
@@ -752,6 +783,7 @@ viewTransactionForm dialogData dialog model leftButton =
                     , textUnderInput = Input.Error (error Transaction.Amount)
                     , dirty = dirtyRecord.amount
                     , maybeDatalist = Nothing
+                    , hasClearButton = False
                     }
                 )
             , Input.view
@@ -760,12 +792,13 @@ viewTransactionForm dialogData dialog model leftButton =
                 , onBlur = Nothing
                 , value = transactionData.description
                 , required = False
-                , id = "description"
+                , id = getId Transaction.Description
                 , hasPlaceholder = False
                 , otherAttributes = [ c "input" ]
                 , textUnderInput = Input.Error Nothing
                 , dirty = False
                 , maybeDatalist = Nothing
+                , hasClearButton = False
                 }
             , Input.view
                 { label = "Currency"
@@ -773,7 +806,7 @@ viewTransactionForm dialogData dialog model leftButton =
                 , onBlur = Just (BluredFromField Transaction.Currency)
                 , value = transactionData.currency
                 , required = True
-                , id = currencyId
+                , id = getId Transaction.Currency
                 , hasPlaceholder = False
                 , otherAttributes =
                     [ disabled
@@ -783,6 +816,7 @@ viewTransactionForm dialogData dialog model leftButton =
                 , textUnderInput = textsUnderInputs.currency
                 , dirty = dirtyRecord.currency
                 , maybeDatalist = Just currencies
+                , hasClearButton = True
                 }
             , Input.view
                 { label = "Account"
@@ -790,12 +824,13 @@ viewTransactionForm dialogData dialog model leftButton =
                 , onBlur = Just (BluredFromField Transaction.Account)
                 , value = transactionData.account
                 , required = False
-                , id = "account"
+                , id = getId Transaction.Account
                 , hasPlaceholder = False
                 , otherAttributes = [ c "input" ]
                 , textUnderInput = textsUnderInputs.account
                 , dirty = False
                 , maybeDatalist = Just accounts
+                , hasClearButton = True
                 }
             , case error Transaction.FullPrice of
                 Nothing ->
@@ -945,8 +980,12 @@ update msg model =
         notDeletedTransactionDataList =
             Transaction.getNotDeletedTransactionDataList transactions
 
-        updateTransactionForm : (Transaction.Data -> Transaction.Data) -> Maybe (DialogData -> DialogData) -> ( Model, Cmd Msg )
-        updateTransactionForm transactionDataUpdate maybeDialogDataUpdate =
+        updateTransactionForm :
+            Maybe String
+            -> (Transaction.Data -> Transaction.Data)
+            -> Maybe (DialogData -> DialogData)
+            -> ( Model, Cmd Msg )
+        updateTransactionForm maybeIdToFocus transactionDataUpdate maybeDialogDataUpdate =
             ( updateDialog
                 (\dialogData ->
                     let
@@ -961,7 +1000,12 @@ update msg model =
                             up newDialogData
                 )
                 model
-            , Cmd.none
+            , case maybeIdToFocus of
+                Just id ->
+                    Task.attempt (\_ -> NoOp) (focus id)
+
+                Nothing ->
+                    Cmd.none
             )
 
         pushUrlBack =
@@ -991,7 +1035,8 @@ update msg model =
                     ( model, pushUrlBack )
 
         SetIsIncome bool ->
-            updateTransactionForm (\val -> { val | isIncome = bool })
+            updateTransactionForm Nothing
+                (\val -> { val | isIncome = bool })
                 (Just
                     (\dd ->
                         let
@@ -1015,12 +1060,22 @@ update msg model =
                 )
 
         SetField field str ->
+            let
+                up =
+                    updateTransactionForm
+                        (if str == "" then
+                            Just (getId field)
+
+                         else
+                            Nothing
+                        )
+            in
             case field of
                 Transaction.Date ->
-                    updateTransactionForm (\val -> { val | date = str }) Nothing
+                    up (\val -> { val | date = str }) Nothing
 
                 Transaction.Category ->
-                    updateTransactionForm (\val -> { val | category = str })
+                    up (\val -> { val | category = str })
                         (getDialogDataField .filteredBasedOnIsIncome dialog
                             |> Maybe.map
                                 (\filteredBasedOnIsIncome ->
@@ -1046,7 +1101,7 @@ update msg model =
                         )
 
                 Transaction.Name ->
-                    updateTransactionForm (\val -> { val | name = str })
+                    up (\val -> { val | name = str })
                         (getDialogDataField .filteredByCategory dialog
                             |> Maybe.map
                                 (\filteredByCategory ->
@@ -1061,13 +1116,13 @@ update msg model =
                         )
 
                 Transaction.Price ->
-                    updateTransactionForm (\val -> { val | price = str }) Nothing
+                    up (\val -> { val | price = str }) Nothing
 
                 Transaction.Amount ->
-                    updateTransactionForm (\val -> { val | amount = str }) Nothing
+                    up (\val -> { val | amount = str }) Nothing
 
                 Transaction.Description ->
-                    updateTransactionForm (\val -> { val | description = str }) Nothing
+                    up (\val -> { val | description = str }) Nothing
 
                 Transaction.Currency ->
                     case getDialogDataField .transactionData dialog of
@@ -1076,7 +1131,7 @@ update msg model =
                                 ( model, Cmd.none )
 
                             else
-                                updateTransactionForm (\val -> { val | currency = str })
+                                up (\val -> { val | currency = str })
                                     (Just
                                         (\dd ->
                                             { dd
@@ -1092,12 +1147,16 @@ update msg model =
                             ( model, Cmd.none )
 
                 Transaction.Account ->
-                    updateTransactionForm
+                    up
                         (\val ->
                             { val
                                 | account = str
                                 , currency =
-                                    case Dict.get str (Transaction.getAccountsDict transactions) of
+                                    case
+                                        Dict.get
+                                            str
+                                            (Transaction.getAccountsDict transactions)
+                                    of
                                         Nothing ->
                                             val.currency
 
@@ -1112,11 +1171,20 @@ update msg model =
                                         getAccounts
                                             notDeletedTransactionDataList
                                             dd.transactionData
+                                    , currencies =
+                                        getCurrencies
+                                            notDeletedTransactionDataList
+                                            dd.transactionData
                                 }
                             )
                         )
 
+                -- is an output field so should not be handled
                 Transaction.FullPrice ->
+                    ( model, Cmd.none )
+
+                -- is handled in SetIncome
+                Transaction.IsIncome ->
                     ( model, Cmd.none )
 
         BluredFromField field ->

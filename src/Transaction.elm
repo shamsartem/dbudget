@@ -56,6 +56,7 @@ import Validate
 
 type Field
     = Date
+    | IsIncome
     | Category
     | Name
     | Price

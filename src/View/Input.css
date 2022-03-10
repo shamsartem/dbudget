@@ -3,6 +3,11 @@
   display: flex;
   flex-direction: column;
 
+  &_inputContainer {
+    position: relative;
+    width: 100%;
+  }
+
   &_input {
     width: 100%;
     height: 30px;
@@ -29,12 +34,15 @@
       }
     }
 
+    &__hasClearButton {
+      padding-right: 30px;
+    }
+
     &::placeholder {
       color: var(--c-gray-5);
     }
 
     &:disabled {
-      cursor: not-allowed;
       opacity: 0.5;
     }
   }
@@ -105,5 +113,42 @@
       border-radius: var(--bdrs-sm);
       white-space: normal;
     }
+  }
+
+  &_clearButton {
+    position: absolute;
+    top: 0;
+    right: 1px;
+    display: flex;
+    width: 30px;
+    height: 30px;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+
+    &::before,
+    &::after {
+      position: absolute;
+      width: 40%;
+      height: 2px;
+      background-color: var(--c-gray-7);
+      content: '';
+      transform: rotate(45deg);
+    }
+
+    &::after {
+      transform: rotate(-45deg);
+    }
+
+    &:disabled {
+      cursor: default;
+      opacity: 0.5;
+    }
+  }
+
+  & > datalist > select {
+    width: 12em;
+    margin: 0;
+    margin-left: -12.75em;
   }
 }

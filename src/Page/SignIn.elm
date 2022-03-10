@@ -183,6 +183,7 @@ view model =
                 , textUnderInput = Input.Error (getError Username)
                 , dirty = model.dirtyRecord.username
                 , maybeDatalist = Nothing
+                , hasClearButton = False
                 }
             , Input.view
                 { label = "Password"
@@ -196,6 +197,7 @@ view model =
                 , textUnderInput = Input.Error (getError Password)
                 , dirty = model.dirtyRecord.password
                 , maybeDatalist = Nothing
+                , hasClearButton = False
                 }
             , Input.view
                 { label = "Device name"
@@ -209,6 +211,7 @@ view model =
                 , textUnderInput = Input.Error (getError DeviceName)
                 , dirty = model.dirtyRecord.deviceName
                 , maybeDatalist = Nothing
+                , hasClearButton = False
                 }
             , button [ class "button", disabled isDisabled ] [ text "Sign in" ]
             ]

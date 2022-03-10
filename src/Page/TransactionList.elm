@@ -12,6 +12,7 @@ module Page.TransactionList exposing
     , view
     )
 
+import Browser.Dom exposing (focus)
 import Cldr.Format.Date as FormatDate
 import Cldr.Format.Length as Length
 import Cldr.Locale as Locale
@@ -24,6 +25,7 @@ import Prng.Uuid exposing (Uuid)
 import Result exposing (Result(..))
 import Route exposing (Route(..))
 import Store exposing (Store)
+import Task
 import Time
 import Transaction
 import View.Header as Header
@@ -320,6 +322,11 @@ init initType store signedInData =
 -- VIEW
 
 
+searchId : String
+searchId =
+    "search"
+
+
 headerView : String -> Bool -> Html Msg
 headerView search isPlaceholder =
     div [ c "header", classList [ ( cl "header__placeholder", isPlaceholder ) ] ]
@@ -332,12 +339,13 @@ headerView search isPlaceholder =
                     , onBlur = Nothing
                     , value = search
                     , required = False
-                    , id = "login"
+                    , id = searchId
                     , hasPlaceholder = True
                     , otherAttributes = []
                     , textUnderInput = Input.NoText
                     , dirty = False
                     , maybeDatalist = Nothing
+                    , hasClearButton = True
                     }
                 ]
             ]
@@ -432,6 +440,7 @@ type Msg
     = SearchInput String
     | InfListMsg InfiniteList.Model
     | GotDialogMsg TransactionDialog.Msg
+    | NoOp
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -445,7 +454,7 @@ update msg model =
                         model.allTransactions
                         search
               }
-            , Cmd.none
+            , Task.attempt (\_ -> NoOp) (focus searchId)
             )
 
         InfListMsg infList ->
@@ -464,6 +473,9 @@ update msg model =
                     ( { model | dialogModel = DialogModel newDialogModel }
                     , Cmd.map GotDialogMsg newDialogCmd
                     )
+
+        NoOp ->
+            ( model, Cmd.none )
 
 
 subscriptions : Model -> Sub Msg
