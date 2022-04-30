@@ -27,7 +27,7 @@
       width: 60%;
       height: 3px;
       background-color: var(--c-gray-7);
-      content: '';
+      content: "";
       transform: rotate(45deg);
     }
 

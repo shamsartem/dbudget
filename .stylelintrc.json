@@ -4,6 +4,8 @@
   "rules": {
     "plugin/no-unsupported-browser-features": [true, { "severity": "warning" }],
     "at-rule-empty-line-before": ["always", { "except": ["inside-block"] }],
-    "declaration-block-no-duplicate-properties": true
+    "declaration-block-no-duplicate-properties": true,
+    "selector-class-pattern": null,
+    "custom-media-pattern": null
   }
 }

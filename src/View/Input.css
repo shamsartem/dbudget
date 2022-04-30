@@ -132,7 +132,7 @@
       width: 40%;
       height: 2px;
       background-color: var(--c-gray-7);
-      content: '';
+      content: "";
       transform: rotate(45deg);
     }
 

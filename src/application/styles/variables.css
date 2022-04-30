@@ -28,16 +28,16 @@
     --l-gray-9: 10%;
   }
 
-  --c-gray-1: hsl(var(--h-gray), var(--s-gray), var(--l-gray-1));
-  --c-gray-1-8: hsl(var(--h-gray), var(--s-gray), var(--l-gray-1), 80%);
-  --c-gray-2: hsl(var(--h-gray), var(--s-gray), var(--l-gray-2));
-  --c-gray-3: hsl(var(--h-gray), var(--s-gray), var(--l-gray-3));
-  --c-gray-4: hsl(var(--h-gray), var(--s-gray), var(--l-gray-4));
-  --c-gray-5: hsl(var(--h-gray), var(--s-gray), var(--l-gray-5));
-  --c-gray-6: hsl(var(--h-gray), var(--s-gray), var(--l-gray-6));
-  --c-gray-7: hsl(var(--h-gray), var(--s-gray), var(--l-gray-7));
-  --c-gray-8: hsl(var(--h-gray), var(--s-gray), var(--l-gray-8));
-  --c-gray-9: hsl(var(--h-gray), var(--s-gray), var(--l-gray-9));
+  --c-gray-1: hsl(var(--h-gray) var(--s-gray) var(--l-gray-1));
+  --c-gray-1-8: hsl(var(--h-gray) var(--s-gray) var(--l-gray-1) / 80%);
+  --c-gray-2: hsl(var(--h-gray) var(--s-gray) var(--l-gray-2));
+  --c-gray-3: hsl(var(--h-gray) var(--s-gray) var(--l-gray-3));
+  --c-gray-4: hsl(var(--h-gray) var(--s-gray) var(--l-gray-4));
+  --c-gray-5: hsl(var(--h-gray) var(--s-gray) var(--l-gray-5));
+  --c-gray-6: hsl(var(--h-gray) var(--s-gray) var(--l-gray-6));
+  --c-gray-7: hsl(var(--h-gray) var(--s-gray) var(--l-gray-7));
+  --c-gray-8: hsl(var(--h-gray) var(--s-gray) var(--l-gray-8));
+  --c-gray-9: hsl(var(--h-gray) var(--s-gray) var(--l-gray-9));
 
   /* info */
   --h-info: 200;
@@ -51,12 +51,12 @@
     --l-info-light: 30%;
   }
 
-  --c-info-dark: hsl(var(--h-info), var(--s-info), var(--l-info-dark));
-  --c-info: hsl(var(--h-info), var(--s-info), var(--l-info));
+  --c-info-dark: hsl(var(--h-info) var(--s-info) var(--l-info-dark));
+  --c-info: hsl(var(--h-info) var(--s-info) var(--l-info));
   --c-info-light:
     hsl(
-      var(--h-info),
-      var(--s-info),
+      var(--h-info)
+      var(--s-info)
       var(--l-info-light)
     );
 
@@ -74,20 +74,20 @@
 
   --c-warning-dark:
     hsl(
-      var(--h-warning),
-      var(--s-warning),
+      var(--h-warning)
+      var(--s-warning)
       var(--l-warning-dark)
     );
   --c-warning:
     hsl(
-      var(--h-warning),
-      var(--s-warning),
+      var(--h-warning)
+      var(--s-warning)
       var(--l-warning)
     );
   --c-warning-light:
     hsl(
-      var(--h-warning),
-      var(--s-warning),
+      var(--h-warning)
+      var(--s-warning)
       var(--l-warning-light)
     );
 
@@ -105,15 +105,15 @@
 
   --c-danger-dark:
     hsl(
-      var(--h-danger),
-      var(--s-danger),
+      var(--h-danger)
+      var(--s-danger)
       var(--l-danger-dark)
     );
-  --c-danger: hsl(var(--h-danger), var(--s-danger), var(--l-danger));
+  --c-danger: hsl(var(--h-danger) var(--s-danger) var(--l-danger));
   --c-danger-light:
     hsl(
-      var(--h-danger),
-      var(--s-danger),
+      var(--h-danger)
+      var(--s-danger)
       var(--l-danger-light)
     );
 
@@ -126,7 +126,7 @@
   --t: 0.2s ease-in-out;
 
   /* Shadows */
-  --shadow-default: 6px 6px 35px rgba(112, 123, 177, 0.2);
+  --shadow-default: 6px 6px 35px rgb(112 123 177 / 20%);
 
   /* Spaces */
   --space-sm: 5px;

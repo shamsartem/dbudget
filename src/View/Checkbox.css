@@ -32,7 +32,7 @@
       left: 0;
       width: var(--size);
       height: var(--size);
-      content: '';
+      content: "";
     }
 
     &::before {

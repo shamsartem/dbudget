@@ -1,37 +1,37 @@
-@import './reset.css';
+@import "./reset.css";
 
-@import './media.css';
+@import "./media.css";
 
-@import './variables.css';
+@import "./variables.css";
 
-@import './global.css';
+@import "./global.css";
 
-@import './animations.css';
+@import "./animations.css";
 
 /* css components */
 
-@import './button.css';
+@import "./button.css";
 
 /* views */
 
-@import '../../View/Input.css';
+@import "../../View/Input.css";
 
-@import '../../View/Checkbox.css';
+@import "../../View/Checkbox.css";
 
-@import '../../View/Header.css';
+@import "../../View/Header.css";
 
-@import '../../View/Loader.css';
+@import "../../View/Loader.css";
 
-@import '../../View/Confirm.css';
+@import "../../View/Confirm.css";
 
 /* pages */
 
-@import '../../Page/NotFound.css';
+@import "../../Page/NotFound.css";
 
-@import '../../Page/SignIn.css';
+@import "../../Page/SignIn.css";
 
-@import '../../Page/TransactionList.css';
+@import "../../Page/TransactionList.css";
 
-@import '../../Page/CSV.css';
+@import "../../Page/CSV.css";
 
-@import '../../Dialog/TransactionDialog.css';
+@import "../../Dialog/TransactionDialog.css";
