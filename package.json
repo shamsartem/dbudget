@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "npm run check && vite build",
-    "serve": "vite preview",
+    "serve": "vite build && vite preview",
     "serve-https": "serve dist",
     "lint-ts": "eslint src/**/*.ts --fix",
     "lint-css": "stylelint ./**/*.css --fix",
@@ -17,23 +17,23 @@
   "author": "Artsiom Shamsutdzinau <shamsartem@gmail.com>",
   "license": "ISC",
   "devDependencies": {
-    "@typescript-eslint/eslint-plugin": "^4.30.0",
-    "@typescript-eslint/parser": "^4.30.0",
+    "@typescript-eslint/eslint-plugin": "^5.21.0",
+    "@typescript-eslint/parser": "^5.21.0",
     "elm-test": "^0.19.1-revision7",
-    "eslint": "^7.32.0",
-    "eslint-plugin-compat": "^3.13.0",
-    "eslint-plugin-import": "^2.24.2",
+    "eslint": "^8.14.0",
+    "eslint-plugin-compat": "^4.0.2",
+    "eslint-plugin-import": "^2.26.0",
     "https-localhost": "^4.7.1",
     "postcss-nested": "^5.0.6",
-    "postcss-preset-env": "^6.7.0",
-    "stylelint": "^13.13.1",
+    "postcss-preset-env": "^7.4.4",
+    "stylelint": "^14.8.1",
     "stylelint-config-idiomatic-order": "^8.1.0",
-    "stylelint-config-standard": "^22.0.0",
-    "stylelint-no-unsupported-browser-features": "^5.0.1",
-    "typescript": "^4.4.2",
-    "vite": "2.5.3",
-    "vite-plugin-elm": "^2.4.3",
-    "vite-plugin-pwa": "^0.11.13"
+    "stylelint-config-standard": "^25.0.0",
+    "stylelint-no-unsupported-browser-features": "^5.0.3",
+    "typescript": "^4.6.4",
+    "vite": "2.9.6",
+    "vite-plugin-elm": "^2.6.1",
+    "vite-plugin-pwa": "^0.12.0"
   },
   "browserslist": [
     "last 2 Chrome major versions",
@@ -45,6 +45,6 @@
     "last 2 Samsung major versions"
   ],
   "dependencies": {
-    "bson": "^4.6.1"
+    "bson": "^4.6.3"
   }
 }

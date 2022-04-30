@@ -403,7 +403,7 @@ transactionValidator transactions =
     Validate.all
         [ Validate.firstError
             [ ifBlank .date ( Date, "Date is missing" )
-            , ifInvalidDate .date ( Date, "Date must be in ISO-8601 format" )
+            , ifInvalidDate .date ( Date, "Date must use 2022-12-31 format" )
             ]
         , ifBlank .category ( Category, "Category is missing" )
         , ifBlank .name ( Name, "Name is missing" )

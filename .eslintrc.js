@@ -11,7 +11,7 @@ module.exports = {
   ],
   rules: {
     '@typescript-eslint/no-extra-semi': ['off'],
-    'no-console': 'error',
+    'no-console': ['error', { allow: ['warn', 'error'] }],
   },
   env: {
     browser: true,
