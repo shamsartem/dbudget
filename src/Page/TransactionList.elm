@@ -154,23 +154,53 @@ transactionsToDisplayedTransactions transactions =
 
 
 filterDisplayedTransactions : String -> List DisplayedTransaction -> List DisplayedTransaction
-filterDisplayedTransactions search displayedTransactions =
+filterDisplayedTransactions initialSearch displayedTransactions =
     let
-        searchLower =
-            String.toLower search
+        trimmedLowerSearch =
+            initialSearch
+                |> String.toLower
+                |> String.trim
+
+        ( finalSearch, maybeIsIncomeSearch ) =
+            if String.startsWith "+" trimmedLowerSearch then
+                ( trimmedLowerSearch |> String.dropLeft 1 |> String.trim, Just True )
+
+            else if String.startsWith "-" trimmedLowerSearch then
+                ( trimmedLowerSearch |> String.dropLeft 1 |> String.trim, Just False )
+
+            else
+                ( trimmedLowerSearch, Nothing )
     in
-    if searchLower == "" then
-        displayedTransactions
+    if trimmedLowerSearch == "" then
+        Maybe.withDefault displayedTransactions
+            (Maybe.map
+                (\isIncomeSearch ->
+                    List.filter
+                        (\{ isIncome } ->
+                            isIncomeSearch == isIncome
+                        )
+                        displayedTransactions
+                )
+                maybeIsIncomeSearch
+            )
 
     else
         List.filter
-            (\{ date, category, name, account } ->
+            (\{ date, category, name, account, isIncome } ->
                 [ date, category, name, account ]
                     |> List.any
                         (\text ->
-                            text
+                            (text
                                 |> String.toLower
-                                |> String.contains searchLower
+                                |> String.contains finalSearch
+                            )
+                                && Maybe.withDefault True
+                                    (Maybe.map
+                                        (\isIncomeSearch ->
+                                            isIncomeSearch == isIncome
+                                        )
+                                        maybeIsIncomeSearch
+                                    )
                         )
             )
             displayedTransactions
