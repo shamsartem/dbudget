@@ -8,8 +8,7 @@ export default defineConfig({
     port: 3001,
   },
   plugins: [
-    elmPlugin(),
-    // { debug: false }
+    elmPlugin({ debug: false }),
     VitePWA({
       includeAssets: [
         'apple-touch-icon.png',

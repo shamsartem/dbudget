@@ -32,7 +32,6 @@ type DialogModel
     = DialogModel TransactionDialog.Model
     | WithoutDialog
         { store : Store
-        , signedInData : Store.SignedInData
         }
 
 
@@ -114,7 +113,7 @@ init store signedInData =
         ( transactionDialogModel, transactionDialogMsg ) =
             case maybeFirstInvalidTransaction of
                 Nothing ->
-                    ( WithoutDialog { store = store, signedInData = signedInData }, Nothing )
+                    ( WithoutDialog { store = { store | signedInData = Just signedInData } }, Nothing )
 
                 Just invalidTransaction ->
                     TransactionDialog.init
@@ -271,9 +270,6 @@ update msg model =
                                 signedInData.transactions
                                 (Transaction.getTransactionsDict transactions)
 
-                        newStore =
-                            { store | uuidSeed = newUuidSeed }
-
                         newSignedInData =
                             { signedInData
                                 | transactions = newTransactions
@@ -282,6 +278,9 @@ update msg model =
                                         []
                                         (List.tail invalidTransactionData)
                             }
+
+                        newStore =
+                            { store | uuidSeed = newUuidSeed, signedInData = Just newSignedInData }
 
                         updateBasedOnInvalidTransactionData dialogModel cmd =
                             ( { model | dialogModel = dialogModel }
@@ -299,7 +298,6 @@ update msg model =
                             updateBasedOnInvalidTransactionData
                                 (WithoutDialog
                                     { store = newStore
-                                    , signedInData = newSignedInData
                                     }
                                 )
                                 Cmd.none

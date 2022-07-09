@@ -220,6 +220,18 @@ sortTransactions list =
                 else if a.lastUpdated < b.lastUpdated then
                     GT
 
+                else if a.category > b.category then
+                    LT
+
+                else if a.category < b.category then
+                    GT
+
+                else if a.name > b.name then
+                    LT
+
+                else if a.name < b.name then
+                    GT
+
                 else
                     EQ
             )
