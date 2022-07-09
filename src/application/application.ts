@@ -1,4 +1,3 @@
-import './vendor/simplepeer.min'
 import './calcInput'
 import './styles/common.css'
 // eslint-disable-next-line import/no-unresolved
