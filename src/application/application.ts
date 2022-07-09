@@ -28,7 +28,11 @@ app.ports.sendMessage.subscribe(
           sendToElm('Toast', "Can't save to database. Wrong data format")
           return
         }
-        encrypt(payload).then(
+        if (store.cred === null) {
+          sendToElm('Toast', "Can't save to database. You are logged out")
+          return
+        }
+        encrypt(payload, store.cred.password).then(
           (encrypted): void => {
             if (store.cred === null) {
               sendToElm('Toast', "Can't save to database. You are logged out")
@@ -41,9 +45,9 @@ app.ports.sendMessage.subscribe(
               id: store.cred.username,
               encrypted,
             })
-            request.onsuccess = async (): Promise<void> => {
+            request.onsuccess = (): void => {
               sendToElm('Toast', 'Saved')
-              await sendToAll()
+              sendToAll(encrypted)
             }
           },
           (error): void => {

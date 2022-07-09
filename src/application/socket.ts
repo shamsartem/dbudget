@@ -1,6 +1,7 @@
 import { io } from 'socket.io-client'
+import { deserialize, serialize } from 'bson'
 
-import { hasKey, isUint8Array } from './typeHelpers'
+import { hasKey, hasKeys, isUint8Array } from './typeHelpers'
 import { getEncrypted } from './idb'
 import { sendToElm } from './elm'
 import { store } from './store'
@@ -17,17 +18,38 @@ export const cleanupPeers = (): void => {
   peers.clear()
 }
 
-export const sendToAll = async (): Promise<void> => {
-  if (store.cred === null) {
-    return
-  }
+const CHUNK_SIZE = 131_072
 
-  const encrypted = await getEncrypted(store.cred.username)
-  if (encrypted === null) {
-    return
+type Chunk = {
+  subarray: {
+    buffer: Uint8Array
   }
-  peers.forEach((peer): void => {
-    peer.send(encrypted)
+  dataLength: number
+  index: number
+}
+
+const isChunkValid = (unknown: unknown): unknown is Chunk =>
+  hasKeys(unknown, 'subarray', 'index', 'dataLength') &&
+  hasKey(unknown.subarray, 'buffer') &&
+  isUint8Array(unknown.subarray.buffer) &&
+  typeof unknown.index === 'number' &&
+  typeof unknown.dataLength === 'number'
+
+const sendChunky = (data: Uint8Array, p: Peer): void => {
+  for (let index = 0; index < data.length; index += CHUNK_SIZE) {
+    p.send(
+      serialize({
+        subarray: data.subarray(index, index + CHUNK_SIZE),
+        dataLength: data.length,
+        index,
+      }),
+    )
+  }
+}
+
+export const sendToAll = (data: Uint8Array): void => {
+  peers.forEach((p): void => {
+    sendChunky(data, p)
   })
 
   if (peers.size === 1) {
@@ -51,7 +73,7 @@ const addListeners = (p: Peer, socketId: string): void => {
         if (encrypted === null) {
           return
         }
-        p.send(encrypted)
+        sendChunky(encrypted, p)
         sendToElm('Toast', 'Sent data to another peer')
       })
       .catch((e): void => {
@@ -75,36 +97,81 @@ const addListeners = (p: Peer, socketId: string): void => {
     })
   })
 
-  p.on('error', (): void => {
+  p.on('error', (e): void => {
+    sendToElm('Toast', `Peer communication error ${String(e)}`)
     p.destroy()
     peers.delete(socketId)
   })
 
+  let data: Array<Uint8Array> = []
+  let currentDataLength = 0
+  let wholeDataLength = 0
+
+  const cleanUp = (): void => {
+    data = []
+    currentDataLength = 0
+    wholeDataLength = 0
+  }
+
+  const cleanUpAndDestroy = (message: string): void => {
+    sendToElm('Toast', message)
+    p.destroy()
+    cleanUp()
+  }
+
   p.on('data', (arrayBuffer: unknown): void => {
-    sendToElm('Toast', 'Got data from another peer')
     if (store.cred === null) {
-      p.destroy()
+      cleanUpAndDestroy("Can't process data. You logged out")
       return
     }
 
-    if (!isUint8Array(arrayBuffer)) {
-      sendToElm('Toast', 'Got wrong data from remote')
+    if (!(arrayBuffer instanceof Uint8Array)) {
+      cleanUpAndDestroy('Got wrong data from remote. Expected: Buffer')
       return
     }
 
-    decrypt({ arrayBuffer, password: store.cred.password })
-      .then((transactions): void => {
-        if (transactions === undefined) {
-          return
-        }
-        sendToElm('GotTransactions', transactions)
-      })
-      .catch((): void => {
-        sendToElm(
-          'Toast',
-          'Got data encrypted with a different password. Make sure your devices use the same password',
-        )
-      })
+    const deserializedData = deserialize(arrayBuffer)
+    if (!isChunkValid(deserializedData)) {
+      cleanUpAndDestroy('Got wrong data from remote. Expected: Chunk')
+      return
+    }
+
+    const {
+      dataLength,
+      index,
+      subarray: { buffer: subarray },
+    } = deserializedData
+
+    if (wholeDataLength === 0) {
+      wholeDataLength = dataLength
+    }
+
+    if (wholeDataLength !== dataLength) {
+      cleanUpAndDestroy(
+        'Did not finish receiving previous data and got new data already',
+      )
+      return
+    }
+
+    data[index] = subarray
+    currentDataLength += subarray.length
+
+    if (currentDataLength === wholeDataLength) {
+      sendToElm('Toast', 'Got data from another peer')
+      const arrayBuffer = new Uint8Array(
+        data.flatMap((arr): Array<number> => [...arr]),
+      )
+      decrypt({ arrayBuffer, password: store.cred.password })
+        .then((transactions): void => {
+          sendToElm('GotTransactions', transactions)
+          cleanUp()
+        })
+        .catch((): void => {
+          cleanUpAndDestroy(
+            'Got data encrypted with a different password. Make sure your devices use the same password',
+          )
+        })
+    }
   })
 
   p.on('close', (): void => {
@@ -115,7 +182,7 @@ const addListeners = (p: Peer, socketId: string): void => {
 
 export const socket = io(
   'https://webrtc-mesh-signaling.herokuapp.com',
-  // 'http://localhost:3000',
+  // 'http://localhost:4000',
   {
     autoConnect: false,
   },

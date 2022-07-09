@@ -3,9 +3,8 @@ import { serialize, deserialize } from 'bson'
 
 import { ajv } from './ajv'
 import { sendToElm } from './elm'
-import { store } from './store'
 
-type Transactions = Array<Array<string>>
+export type Transactions = Array<Array<string>>
 
 export const transactionsSchema: JSONSchemaType<Transactions> = {
   type: 'array',
@@ -51,11 +50,8 @@ const getEncryptionKey = async (
 
 export const encrypt = async (
   transactions: Array<Array<string>>,
-): Promise<Uint8Array | undefined> => {
-  if (store.cred === null) {
-    sendToElm('Toast', "Can't encrypt. You signed out")
-    return
-  }
+  password: string,
+): Promise<Uint8Array> => {
   const salt = crypto.getRandomValues(new Uint8Array(SALT_LENGTH))
   const iv = crypto.getRandomValues(new Uint8Array(IV_LENGTH))
   const encrypted: unknown = await crypto.subtle.encrypt(
@@ -63,13 +59,13 @@ export const encrypt = async (
       name: ALGORITHM,
       iv,
     },
-    await getEncryptionKey(store.cred.password, salt, true),
+    await getEncryptionKey(password, salt, true),
     serialize({ transactions }),
   )
 
   if (!(encrypted instanceof ArrayBuffer)) {
-    sendToElm('Toast', 'Incorrect data after encryption')
-    return
+    sendToElm('Toast', 'Incorrect data after encryption. Unrecoverable error')
+    throw new Error('Incorrect data after encryption')
   }
 
   const encryptedUint8Array = new Uint8Array(encrypted)
@@ -88,7 +84,7 @@ export const decrypt = async ({
 }: {
   arrayBuffer: Uint8Array
   password: string
-}): Promise<Transactions | undefined> => {
+}): Promise<Transactions> => {
   const salt = arrayBuffer.slice(0, SALT_LENGTH)
   const iv = arrayBuffer.slice(SALT_LENGTH, IV_AND_SALT_LENGTH)
   const encryptedArray = arrayBuffer.slice(IV_AND_SALT_LENGTH)
@@ -102,15 +98,18 @@ export const decrypt = async ({
   )
 
   if (!(decrypted instanceof ArrayBuffer)) {
-    sendToElm('Toast', 'Decrypted data has wrong format')
-    return
+    sendToElm('Toast', 'Decrypted data has wrong format. Unrecoverable error')
+    throw new Error('Decrypted data has wrong format')
   }
 
   const { transactions } = deserialize(decrypted)
 
   if (!validateTransactions(transactions)) {
-    sendToElm('Toast', 'Deserialized data has wrong format')
-    return
+    sendToElm(
+      'Toast',
+      'Deserialized data has wrong format. Unrecoverable error',
+    )
+    throw new Error('Decrypted data has wrong format')
   }
 
   return transactions
