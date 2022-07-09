@@ -46,10 +46,7 @@ type alias DisplayedTransaction =
 
 type DialogModel
     = DialogModel TransactionDialog.Model
-    | WithoutDialog
-        { store : Store
-        , signedInData : Store.SignedInData
-        }
+    | WithoutDialog { store : Store }
 
 
 type alias Model =
@@ -75,10 +72,10 @@ getStore : Model -> Store
 getStore model =
     case model.dialogModel of
         WithoutDialog m ->
-            Store.getStore m
+            m.store
 
         DialogModel m ->
-            Store.getStore m
+            m.store
 
 
 setStore : Store -> Model -> Model
@@ -186,8 +183,8 @@ filterDisplayedTransactions initialSearch displayedTransactions =
 
     else
         List.filter
-            (\{ date, category, name, account, isIncome } ->
-                [ date, category, name, account ]
+            (\{ date, category, name, account, isIncome, price } ->
+                [ date, category, name, account, price ]
                     |> List.any
                         (\text ->
                             (text
@@ -324,9 +321,7 @@ init initType store signedInData =
 
                 NoDialog ->
                     ( WithoutDialog
-                        { store = store
-                        , signedInData = signedInData
-                        }
+                        { store = { store | signedInData = Just signedInData } }
                     , Nothing
                     )
 

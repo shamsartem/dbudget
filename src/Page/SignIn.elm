@@ -10,12 +10,14 @@ module Page.SignIn exposing
     )
 
 import Browser.Navigation as Nav
-import Cred exposing (Cred)
 import Html exposing (..)
-import Html.Attributes exposing (class, classList, disabled, novalidate)
-import Html.Events exposing (onSubmit)
+import Html.Attributes exposing (class, classList, disabled, novalidate, type_)
+import Html.Events exposing (onClick, onSubmit)
+import Json.Decode
 import Port
-import Store exposing (Store)
+import Prng.Uuid
+import Store exposing (Store, getNewUuid)
+import Time
 import Transaction
 import Url
 import Validate exposing (Validator, ifBlank, validate)
@@ -32,7 +34,7 @@ type alias DirtyRecord =
 
 type SignInState
     = SignInNotAttempted
-    | SignedInAndLoading Cred
+    | SignedInAndLoading
     | WrongPassword
 
 
@@ -71,18 +73,24 @@ c elementAndOrModifier =
     class (cl elementAndOrModifier)
 
 
-getCredValue : Model -> Cred.Data
-getCredValue { deviceName, password, username } =
-    { deviceName = deviceName
-    , password = password
-    , username = username
-    }
-
-
 type Field
     = DeviceName
     | Password
     | Username
+
+
+ifNotUuid : (subject -> String) -> error -> Validator error subject
+ifNotUuid subjectToString error =
+    let
+        getErrors subject =
+            case subject |> subjectToString |> Prng.Uuid.fromString of
+                Just _ ->
+                    []
+
+                Nothing ->
+                    [ error ]
+    in
+    Validate.fromErrors getErrors
 
 
 modelValidator : Validator ( Field, String ) Model
@@ -90,7 +98,10 @@ modelValidator =
     Validate.all
         [ ifBlank .deviceName ( DeviceName, "Device name is missing" )
         , ifBlank .password ( Password, "Password is missing" )
-        , ifBlank .username ( Username, "Username is missing" )
+        , Validate.firstError
+            [ ifBlank .username ( Username, "Username is missing" )
+            , ifNotUuid .username ( Username, "Username is not a valid UUID" )
+            ]
         ]
 
 
@@ -140,7 +151,7 @@ view model =
 
         getBlurHandler field =
             case model.signInState of
-                SignedInAndLoading _ ->
+                SignedInAndLoading ->
                     Nothing
 
                 _ ->
@@ -148,7 +159,7 @@ view model =
 
         isDisabled =
             case model.signInState of
-                SignedInAndLoading _ ->
+                SignedInAndLoading ->
                     True
 
                 _ ->
@@ -160,7 +171,7 @@ view model =
             SignInNotAttempted ->
                 text ""
 
-            SignedInAndLoading _ ->
+            SignedInAndLoading ->
                 div [ c "state" ] [ Loader.view Nothing ]
 
             WrongPassword ->
@@ -171,20 +182,29 @@ view model =
             , onSubmit SignIn
             , novalidate True
             ]
-            [ Input.view
-                { label = "Username"
-                , onInput = LoginInput
-                , value = model.username
-                , onBlur = getBlurHandler Username
-                , required = True
-                , hasPlaceholder = False
-                , id = "username"
-                , otherAttributes = [ disabled isDisabled ]
-                , textUnderInput = Input.Error (getError Username)
-                , dirty = model.dirtyRecord.username
-                , maybeDatalist = Nothing
-                , hasClearButton = False
-                }
+            [ div [ c "usernameContainer" ]
+                [ Input.view
+                    { label = "Username"
+                    , onInput = LoginInput
+                    , value = model.username
+                    , onBlur = getBlurHandler Username
+                    , required = True
+                    , hasPlaceholder = False
+                    , id = "username"
+                    , otherAttributes = [ disabled isDisabled ]
+                    , textUnderInput = Input.Error (getError Username)
+                    , dirty = model.dirtyRecord.username
+                    , maybeDatalist = Nothing
+                    , hasClearButton = False
+                    }
+                , button
+                    [ c "newButton"
+                    , class "button"
+                    , type_ "button"
+                    , onClick NewUsernameRequested
+                    ]
+                    [ text "New" ]
+                ]
             , Input.view
                 { label = "Password"
                 , onInput = PasswordInput
@@ -193,7 +213,7 @@ view model =
                 , required = True
                 , hasPlaceholder = False
                 , id = "password"
-                , otherAttributes = [ disabled isDisabled ]
+                , otherAttributes = [ disabled isDisabled, type_ "password" ]
                 , textUnderInput = Input.Error (getError Password)
                 , dirty = model.dirtyRecord.password
                 , maybeDatalist = Nothing
@@ -224,7 +244,8 @@ type Msg
     | DeviceNameInput String
     | BluredFromField Field
     | SignIn
-    | SentToElm String
+    | RecievedMessage Port.Message
+    | NewUsernameRequested
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -254,62 +275,68 @@ update msg model =
             )
 
         SignIn ->
-            case
-                model
-                    |> getCredValue
-                    |> Cred.credDataToCred
-            of
-                Just cred ->
-                    ( { model
-                        | signInState = SignedInAndLoading cred
-                        , store = { store | deviceName = model.deviceName }
-                      }
-                    , Port.handleSignIn (Cred.toJsonString cred)
+            if model.username /= "" && model.deviceName /= "" && model.password /= "" then
+                ( { model
+                    | signInState = SignedInAndLoading
+                    , store = { store | deviceName = model.deviceName }
+                  }
+                , Port.send
+                    (Port.SignedIn
+                        { username =
+                            model.username
+                        , deviceName = model.deviceName
+                        , password = model.password
+                        }
                     )
+                )
 
-                Nothing ->
-                    ( { model
-                        | dirtyRecord =
-                            { deviceName = True
-                            , password = True
-                            , username = True
-                            }
-                      }
-                    , Cmd.none
-                    )
+            else
+                ( { model
+                    | dirtyRecord =
+                        { deviceName = True
+                        , password = True
+                        , username = True
+                        }
+                  }
+                , Cmd.none
+                )
 
-        SentToElm str ->
-            case Port.parseSentToElmMsg str of
-                "signInSuccess" ->
-                    case model.signInState of
-                        SignedInAndLoading cred ->
+        RecievedMessage { tag, payload } ->
+            case tag of
+                "SignInSuccess" ->
+                    case
+                        Json.Decode.decodeValue
+                            (Json.Decode.list
+                                (Json.Decode.array Json.Decode.string)
+                            )
+                            payload
+                    of
+                        Ok listOfRows ->
                             let
-                                -- ignore invalid because there should
-                                -- should only be valid in local storage
-                                { transactions } =
-                                    Transaction.stringToTransactionDict
+                                { transactions, newUuidSeed, invalidTransactionData } =
+                                    Transaction.listOfRowsToTransactions
                                         store.uuidSeed
-                                        str
+                                        (Time.millisToPosix 0)
+                                        listOfRows
                             in
-                            ( { model
-                                | store =
-                                    { store
-                                        | signedInData =
-                                            Just
-                                                { transactions = transactions
-                                                , cred = cred
-                                                , invalidTransactionData = []
-                                                }
-                                    }
-                              }
+                            ( setStore
+                                { store
+                                    | signedInData =
+                                        Just
+                                            { transactions = transactions
+                                            , invalidTransactionData = invalidTransactionData
+                                            }
+                                    , uuidSeed = newUuidSeed
+                                }
+                                model
                             , Nav.pushUrl store.navKey (Url.toString store.url)
                             )
 
-                        -- should never happen
-                        _ ->
+                        Err _ ->
+                            -- TODO: solve error
                             ( model, Cmd.none )
 
-                "wrongPassword" ->
+                "WrongPassword" ->
                     ( { model | signInState = WrongPassword }
                     , Cmd.none
                     )
@@ -329,7 +356,19 @@ update msg model =
                 Password ->
                     updateDirtyRecord (\val -> { val | password = True }) model
 
+        NewUsernameRequested ->
+            let
+                ( newStore, newUuid ) =
+                    getNewUuid store
+
+                newModel =
+                    setStore newStore model
+            in
+            ( { newModel | username = Prng.Uuid.toString newUuid }
+            , Cmd.none
+            )
+
 
 subscriptions : Sub Msg
 subscriptions =
-    Port.receiveString SentToElm
+    Port.gotMessage RecievedMessage

@@ -4,19 +4,23 @@ import Browser exposing (Document)
 import Browser.Events exposing (onResize)
 import Browser.Navigation as Nav
 import Html exposing (..)
+import Json.Decode
 import Page.CSV as CSV
 import Page.NotFound as NotFound
 import Page.SignIn as SignIn
 import Page.TransactionList as TransactionList
 import Port
 import Prng.Uuid
+import Process
 import Route exposing (Route(..))
 import Store exposing (Store)
 import Task
 import Time
+import Transaction
 import Url exposing (Url)
 import UuidSeed exposing (UuidSeed)
 import View.Confirm as Confirm
+import View.Toasts as Toasts
 
 
 type alias Flags =
@@ -54,6 +58,7 @@ initialModel maybeSeed { seedAndExtension, deviceName, windowWidth } url key =
             , isRefreshWindowVisible = False
             , isOfflineReadyWindowVisible = False
             , currentTimeZone = Time.utc
+            , toasts = []
             }
     in
     case Route.fromUrl url of
@@ -105,7 +110,7 @@ getTitle model =
 view : Model -> Document Msg
 view model =
     let
-        { isOfflineReadyWindowVisible, isRefreshWindowVisible } =
+        { isOfflineReadyWindowVisible, isRefreshWindowVisible, toasts } =
             getStore model
 
         viewPage toMsg content =
@@ -140,6 +145,11 @@ view model =
 
                   else
                     text ""
+                , if List.length toasts /= 0 then
+                    Toasts.view toasts
+
+                  else
+                    text ""
                 ]
             }
     in
@@ -166,11 +176,12 @@ type Msg
     | GotTransactionListMsg TransactionList.Msg
     | GotCSVMsg CSV.Msg
     | GotNewWindowWidth Int
-    | SentToElm String
+    | RecievedMessage Port.Message
     | OkOfflineReadyClicked
     | RefreshClicked
     | CancelRefreshClicked
     | GotTimeZone Time.Zone
+    | RemoveToast
 
 
 getStore : Model -> Store
@@ -242,7 +253,7 @@ changeRouteTo maybeRoute store =
                     CSV.init store signedInData
                         |> updatePageWith CSV GotCSVMsg
 
-                Just Route.LogOut ->
+                Just Route.SignOut ->
                     let
                         ( m, cmd ) =
                             initialModel
@@ -263,6 +274,7 @@ changeRouteTo maybeRoute store =
                         , Route.pushUrl
                             store.navKey
                             Route.TransactionList
+                        , Port.send Port.SignedOut
                         ]
                     )
 
@@ -309,24 +321,81 @@ update message model =
             CSV.update subMsg csvModel
                 |> updatePageWith CSV GotCSVMsg
 
-        ( SentToElm msg, _ ) ->
-            case Port.parseSentToElmMsg msg of
-                "needRefresh" ->
+        ( RecievedMessage { tag, payload }, _ ) ->
+            case tag of
+                "NeedRefresh" ->
                     ( setStore
                         { store | isRefreshWindowVisible = True }
                         model
                     , Cmd.none
                     )
 
-                "offlineReady" ->
+                "OfflineReady" ->
                     ( setStore
                         { store | isOfflineReadyWindowVisible = True }
                         model
                     , Cmd.none
                     )
 
+                "GotTransactions" ->
+                    case
+                        ( Json.Decode.decodeValue
+                            (Json.Decode.list
+                                (Json.Decode.array Json.Decode.string)
+                            )
+                            payload
+                        , store.signedInData
+                        )
+                    of
+                        ( Ok listOfRows, Just signedInData ) ->
+                            let
+                                { transactions, newUuidSeed } =
+                                    Transaction.listOfRowsToTransactions
+                                        store.uuidSeed
+                                        (Time.millisToPosix 0)
+                                        listOfRows
+                            in
+                            ( setStore
+                                { store
+                                    | signedInData =
+                                        Just
+                                            { signedInData
+                                                | transactions =
+                                                    Transaction.mergeTransactions
+                                                        signedInData.transactions
+                                                        (Transaction.getTransactionsDict transactions)
+                                            }
+                                    , uuidSeed = newUuidSeed
+                                }
+                                model
+                            , Nav.pushUrl store.navKey (Url.toString store.url)
+                            )
+
+                        _ ->
+                            -- TODO: solve error
+                            ( model, Cmd.none )
+
+                "Toast" ->
+                    case
+                        payload |> Json.Decode.decodeValue Json.Decode.string
+                    of
+                        Ok toast ->
+                            ( setStore
+                                { store | toasts = List.append store.toasts [ toast ] }
+                                model
+                            , Process.sleep 5000
+                                |> Task.perform (\_ -> RemoveToast)
+                            )
+
+                        Err _ ->
+                            -- js should always send string toast
+                            ( model, Cmd.none )
+
                 _ ->
                     ( model, Cmd.none )
+
+        ( RemoveToast, _ ) ->
+            ( setStore { store | toasts = List.drop 1 store.toasts } model, Cmd.none )
 
         ( OkOfflineReadyClicked, _ ) ->
             ( setStore
@@ -339,7 +408,7 @@ update message model =
             ( setStore
                 { store | isRefreshWindowVisible = False }
                 model
-            , Port.refreshApp
+            , Port.send Port.RefreshApp
             )
 
         ( CancelRefreshClicked, _ ) ->
@@ -385,7 +454,7 @@ subscriptions model =
     Sub.batch
         [ pageSubscriptions
         , onResize (\w _ -> GotNewWindowWidth w)
-        , Port.receiveString SentToElm
+        , Port.gotMessage RecievedMessage
         ]
 
 

@@ -1,4 +1,6 @@
-const calcOnly = (string: string) =>
+import { hasKey, hasKeys } from './typeHelpers'
+
+const calcOnly = (string: string): string =>
   string.replace(',', '.').replace(/[^\d+\-.]/g, '')
 
 const inputEvent = new Event('input', {
@@ -8,21 +10,29 @@ const inputEvent = new Event('input', {
 
 window.addEventListener(
   'input',
-  (event) => {
-    const target = event.target as HTMLInputElement
-
-    if (!target?.dataset || !('calcInput' in target.dataset)) {
+  ({ target }): void => {
+    if (!(target instanceof HTMLInputElement)) {
       return
     }
 
-    const pos = target.selectionStart
-
-    if (!pos) {
+    if (!hasKey(target.dataset, 'calcInput')) {
       return
     }
 
-    const before = calcOnly(target.value.slice(0, pos))
-    const after = calcOnly(target.value.slice(pos))
+    const { value } = target
+
+    if (typeof value !== 'string') {
+      return
+    }
+
+    const { selectionStart } = target
+
+    if (typeof selectionStart !== 'number') {
+      return
+    }
+
+    const before = calcOnly(value.slice(0, selectionStart))
+    const after = calcOnly(value.slice(selectionStart))
     target.value = before + after
     target.selectionStart = before.length
     target.selectionEnd = before.length
@@ -32,26 +42,31 @@ window.addEventListener(
 
 window.addEventListener(
   'blur',
-  (event) => {
-    const target = event.target as HTMLInputElement
-
-    if (!target?.dataset || !('calcInput' in target.dataset)) {
+  ({ target }): void => {
+    if (!(target instanceof HTMLInputElement)) {
       return
     }
 
-    const pos = target.selectionStart
-
-    if (!pos) {
+    if (!hasKeys(target.dataset, 'calcInput', 'pos')) {
       return
     }
 
-    target.dataset.pos = `${pos}`
+    const { selectionStart } = target
+
+    if (typeof selectionStart !== 'number') {
+      return
+    }
+
+    target.dataset.pos = `${selectionStart}`
   },
   { capture: true },
 )
 
-const insertSymbol = (inputEl: HTMLInputElement, symbol: string) => {
-  const pos = +(inputEl.dataset.pos || inputEl.value.length)
+const insertSymbol = (
+  inputEl: HTMLInputElement & { dataset: { pos?: string } },
+  symbol: string,
+): void => {
+  const pos = +(inputEl?.dataset.pos ?? inputEl.value.length)
   const before = inputEl.value.slice(0, pos) + symbol
   const after = calcOnly(inputEl.value.slice(pos))
   inputEl.value = before + after
@@ -63,26 +78,31 @@ const insertSymbol = (inputEl: HTMLInputElement, symbol: string) => {
 
 window.addEventListener(
   'click',
-  (event) => {
-    const target = event.target as HTMLButtonElement
-    const inputId = target?.dataset?.forCalcInput
-
-    if (!inputId) {
+  ({ target }): void => {
+    if (!hasKeys(target, 'dataset')) {
       return
     }
 
-    const inputEl = document.getElementById(inputId) as HTMLInputElement | null
-
-    if (!inputEl) {
+    if (!hasKeys(target.dataset, 'forCalcInput')) {
       return
     }
 
-    if ('plus' in target.dataset) {
+    if (typeof target.dataset.forCalcInput !== 'string') {
+      return
+    }
+
+    const inputEl = document.getElementById(target.dataset.forCalcInput)
+
+    if (!(inputEl instanceof HTMLInputElement)) {
+      return
+    }
+
+    if (hasKey(target.dataset, 'plus')) {
       insertSymbol(inputEl, '+')
       return
     }
 
-    if ('minus' in target.dataset) {
+    if (hasKey(target.dataset, 'minus')) {
       insertSymbol(inputEl, '-')
       return
     }

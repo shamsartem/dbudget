@@ -1,16 +1,15 @@
 {
+  "extends": "@tsconfig/strictest/tsconfig.json",
   "compilerOptions": {
     "target": "ESNext",
     "moduleResolution": "node",
-    "strict": true,
     "declaration": true,
-    "noUnusedLocals": true,
-    "esModuleInterop": true,
     "outDir": "dist",
     "module": "commonjs",
     "lib": ["ESNext", "DOM", "WebWorker"],
     "sourceMap": true,
-    "skipLibCheck": true
+    "types": ["vite-plugin-pwa/client"],
+    "resolveJsonModule": true
   },
-  "include": ["./src/application"]
+  "include": ["./src/application", "./vite.config.ts"]
 }

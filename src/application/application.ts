@@ -1,53 +1,112 @@
-import { Elm } from '../Main.elm'
-import { LOCAL_STORAGE_DEVICE_NAME } from './consts'
-import getElmMessageHandler from './ports/getElmMessageHandler'
-import './styles/common.css'
-import sendToElm from './ports/sendToElm'
-import { registerSW } from 'virtual:pwa-register'
+import './vendor/simplepeer.min'
 import './calcInput'
+import './styles/common.css'
+// eslint-disable-next-line import/no-unresolved
+import { registerSW } from 'virtual:pwa-register'
 
-declare global {
-  interface Window {
-    msCrypto?: Crypto
-  }
-}
+import { cleanupPeers, sendToAll, socket } from './socket'
+import { store, validateCred } from './store'
+import { app, sendToElm } from './elm'
+import { decrypt, encrypt, validateTransactions } from './transactions'
+import { getEncrypted, dbOpenRequest, TRANSACTIONS } from './idb'
+import { LOCAL_STORAGE_DEVICE_NAME } from './consts'
 
-const crypto = window.crypto || window.msCrypto
+const updateSW = registerSW({
+  onNeedRefresh(): void {
+    sendToElm('NeedRefresh')
+  },
+  onOfflineReady(): void {
+    sendToElm('OfflineReady')
+  },
+})
 
-const getRandomInts = (n: number) => {
-  const randomIntegers = new Uint32Array(n)
-  crypto.getRandomValues(randomIntegers)
-  return Array.from(randomIntegers)
-}
+app.ports.sendMessage.subscribe(
+  ({ tag, payload }: { tag: SentFromElmMsg; payload: unknown }): void => {
+    switch (tag) {
+      case 'UpdatedTransactions': {
+        if (!validateTransactions(payload)) {
+          sendToElm('Toast', "Can't save to database. Wrong data format")
+          return
+        }
+        encrypt(payload).then(
+          (encrypted): void => {
+            if (store.cred === null) {
+              sendToElm('Toast', "Can't save to database. You are logged out")
+              return
+            }
+            const db = dbOpenRequest.result
+            const transaction = db.transaction(TRANSACTIONS, 'readwrite')
+            const objectStore = transaction.objectStore(TRANSACTIONS)
+            const request = objectStore.put({
+              id: store.cred.username,
+              encrypted,
+            })
+            request.onsuccess = async (): Promise<void> => {
+              sendToElm('Toast', 'Saved')
+              await sendToAll()
+            }
+          },
+          (error): void => {
+            sendToElm(
+              'Toast',
+              `Can't save to database. Encryption error: ${String(error)}`,
+            )
+          },
+        )
+        break
+      }
+      case 'SignedIn': {
+        if (validateCred(payload)) {
+          store.cred = payload
+          const { password, username, deviceName } = payload
+          localStorage.setItem(LOCAL_STORAGE_DEVICE_NAME, deviceName)
+          getEncrypted(username)
+            .then(async (encrypted): Promise<void> => {
+              try {
+                const decrypted =
+                  encrypted === null
+                    ? []
+                    : await decrypt({
+                        arrayBuffer: encrypted,
+                        password,
+                      })
 
-// For a UUID, we need at least 128 bits of randomness.
-// This means we need to seed our generator with at least 4 32-bit ints.
-// We get 5 here, since the Pcg.Extended generator performs slightly faster if our extension array
-// has a size that is a power of two (4 here).
-const randomIntegers = getRandomInts(5)
-
-const deviceName = localStorage.getItem(LOCAL_STORAGE_DEVICE_NAME)
-
-const appEl = document.getElementById('app')
-
-if (appEl) {
-  const app = Elm.Main.init({
-    node: appEl,
-    flags: {
-      seedAndExtension: [randomIntegers[0], randomIntegers.slice(1)],
-      deviceName: deviceName ?? '',
-      windowWidth: window.innerWidth,
-    },
-  })
-
-  const updateSW = registerSW({
-    onNeedRefresh() {
-      sendToElm(app, 'needRefresh')
-    },
-    onOfflineReady() {
-      sendToElm(app, 'offlineReady')
-    },
-  })
-
-  app.ports.sendFromElm.subscribe(getElmMessageHandler(app, updateSW))
-}
+                sendToElm('SignInSuccess', decrypted)
+                socket.connect()
+              } catch (e) {
+                sendToElm('WrongPassword')
+                return
+              }
+            })
+            .catch((e): void => {
+              sendToElm('Toast', `Can't get data from database: ${String(e)}`)
+            })
+          break
+        }
+        sendToElm('Toast', 'Sign in Error')
+        break
+      }
+      case 'SignedOut': {
+        store.cred = null
+        cleanupPeers()
+        socket.disconnect()
+        break
+      }
+      case 'RefreshAppClicked': {
+        updateSW().then(
+          (): void => {
+            sendToElm('Toast', 'App updated successfully')
+          },
+          (error): void => {
+            sendToElm('Toast', `Can't update app: ${String(error)}`)
+          },
+        )
+        break
+      }
+      default: {
+        const exhaustiveCheck: never = tag
+        return exhaustiveCheck
+      }
+    }
+  },
+)

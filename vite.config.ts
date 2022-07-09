@@ -2,9 +2,14 @@ import { defineConfig } from 'vite'
 import elmPlugin from 'vite-plugin-elm'
 import { VitePWA } from 'vite-plugin-pwa'
 
+// eslint-disable-next-line import/no-default-export
 export default defineConfig({
+  server: {
+    port: 3001,
+  },
   plugins: [
-    elmPlugin({ debug: false }),
+    elmPlugin(),
+    // { debug: false }
     VitePWA({
       includeAssets: [
         'apple-touch-icon.png',

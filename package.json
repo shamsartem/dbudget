@@ -17,12 +17,14 @@
   "author": "Artsiom Shamsutdzinau <shamsartem@gmail.com>",
   "license": "ISC",
   "devDependencies": {
+    "@tsconfig/strictest": "^1.0.1",
     "@typescript-eslint/eslint-plugin": "^5.25.0",
     "@typescript-eslint/parser": "^5.25.0",
     "elm-test": "^0.19.1-revision7",
     "eslint": "^8.16.0",
     "eslint-plugin-compat": "^4.0.2",
     "eslint-plugin-import": "^2.26.0",
+    "eslint-plugin-unused-imports": "^2.0.0",
     "https-localhost": "^4.7.1",
     "postcss-nested": "^5.0.6",
     "postcss-preset-env": "^7.6.0",
@@ -41,6 +43,147 @@
     "last 1 safari version"
   ],
   "dependencies": {
-    "bson": "^4.6.4"
-  }
+    "ajv": "^8.11.0",
+    "bson": "^4.6.4",
+    "socket.io-client": "^4.5.1",
+    "vite-compatible-simple-peer": "^9.11.0"
+  },
+  "prettier": {
+    "trailingComma": "all",
+    "semi": false,
+    "singleQuote": true
+  },
+  "eslintConfig": {
+    "parser": "@typescript-eslint/parser",
+    "plugins": [
+      "@typescript-eslint",
+      "import",
+      "unused-imports"
+    ],
+    "extends": [
+      "plugin:compat/recommended",
+      "eslint:recommended",
+      "plugin:@typescript-eslint/recommended",
+      "plugin:import/recommended",
+      "plugin:import/typescript"
+    ],
+    "rules": {
+      "eqeqeq": "error",
+      "@typescript-eslint/explicit-function-return-type": [
+        "warn",
+        {
+          "allowExpressions": false,
+          "allowTypedFunctionExpressions": false,
+          "allowHigherOrderFunctions": false,
+          "allowDirectConstAssertionInArrowFunctions": false,
+          "allowConciseArrowFunctionExpressionsStartingWithVoid": false
+        }
+      ],
+      "@typescript-eslint/explicit-member-accessibility": [
+        "error",
+        {
+          "accessibility": "no-public"
+        }
+      ],
+      "@typescript-eslint/strict-boolean-expressions": [
+        "error",
+        {
+          "allowString": false,
+          "allowNumber": false,
+          "allowNullableObject": false,
+          "allowNullableBoolean": false,
+          "allowNullableString": false,
+          "allowNullableNumber": false,
+          "allowAny": false
+        }
+      ],
+      "@typescript-eslint/consistent-type-assertions": [
+        "error",
+        {
+          "assertionStyle": "never"
+        }
+      ],
+      "@typescript-eslint/no-extra-semi": [
+        "off"
+      ],
+      "no-console": [
+        "error",
+        {
+          "allow": [
+            "warn",
+            "error"
+          ]
+        }
+      ],
+      "import/order": [
+        "error",
+        {
+          "newlines-between": "always"
+        }
+      ],
+      "import/no-default-export": "error",
+      "unused-imports/no-unused-imports": "error"
+    },
+    "env": {
+      "browser": true
+    },
+    "overrides": [
+      {
+        "files": [
+          "*.ts",
+          "*.tsx"
+        ],
+        "extends": [
+          "plugin:@typescript-eslint/recommended",
+          "plugin:@typescript-eslint/recommended-requiring-type-checking"
+        ],
+        "parserOptions": {
+          "project": [
+            "./tsconfig.json"
+          ]
+        }
+      }
+    ]
+  },
+  "eslintIgnore": [
+    "/node_modules",
+    "/dist"
+  ],
+  "postcss": {
+    "plugins": {
+      "postcss-preset-env": {},
+      "postcss-nested": {}
+    }
+  },
+  "stylelint": {
+    "extends": [
+      "stylelint-config-standard",
+      "stylelint-config-idiomatic-order"
+    ],
+    "plugins": [
+      "stylelint-no-unsupported-browser-features"
+    ],
+    "rules": {
+      "plugin/no-unsupported-browser-features": [
+        true,
+        {
+          "severity": "warning"
+        }
+      ],
+      "at-rule-empty-line-before": [
+        "always",
+        {
+          "except": [
+            "inside-block"
+          ]
+        }
+      ],
+      "declaration-block-no-duplicate-properties": true,
+      "selector-class-pattern": null,
+      "custom-media-pattern": null
+    }
+  },
+  "stylelintIgnore": [
+    "dist"
+  ]
 }

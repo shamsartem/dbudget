@@ -10,7 +10,7 @@
 
   &_form {
     display: flex;
-    width: 260px;
+    width: 280px;
     flex-direction: column;
 
     &__disabled {
@@ -22,20 +22,25 @@
     }
   }
 
+  &_usernameContainer {
+    display: flex;
+    align-items: center;
+  }
+
+  &_newButton {
+    padding: 7px;
+    margin-left: auto;
+
+    & + * {
+      flex-grow: 1;
+    }
+  }
+
   &_state {
     margin-bottom: 15px;
 
     &__wrongPassword {
       color: var(--c-danger);
-    }
-  }
-
-  &_installApp {
-    display: none;
-    margin-top: 15px;
-
-    &__visible {
-      display: flex;
     }
   }
 }

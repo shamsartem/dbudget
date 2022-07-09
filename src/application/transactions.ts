@@ -1,4 +1,18 @@
+import type { JSONSchemaType } from 'ajv'
 import { serialize, deserialize } from 'bson'
+
+import { ajv } from './ajv'
+import { sendToElm } from './elm'
+import { store } from './store'
+
+type Transactions = Array<Array<string>>
+
+export const transactionsSchema: JSONSchemaType<Transactions> = {
+  type: 'array',
+  items: { type: 'array', items: { type: 'string' } },
+}
+
+export const validateTransactions = ajv.compile(transactionsSchema)
 
 const IV_LENGTH = 12
 const SALT_LENGTH = 16
@@ -12,7 +26,7 @@ const getEncryptionKey = async (
   password: string,
   salt: Uint8Array,
   encrypt = false,
-) => {
+): Promise<CryptoKey> => {
   const passwordKey = await crypto.subtle.importKey(
     'raw',
     textEncoder.encode(password),
@@ -36,27 +50,36 @@ const getEncryptionKey = async (
 }
 
 export const encrypt = async (
-  password: string,
-  transactions: string,
-): Promise<Uint8Array> => {
+  transactions: Array<Array<string>>,
+): Promise<Uint8Array | undefined> => {
+  if (store.cred === null) {
+    sendToElm('Toast', "Can't encrypt. You signed out")
+    return
+  }
   const salt = crypto.getRandomValues(new Uint8Array(SALT_LENGTH))
   const iv = crypto.getRandomValues(new Uint8Array(IV_LENGTH))
-  const encrypted = await crypto.subtle.encrypt(
+  const encrypted: unknown = await crypto.subtle.encrypt(
     {
       name: ALGORITHM,
       iv,
     },
-    await getEncryptionKey(password, salt, true),
+    await getEncryptionKey(store.cred.password, salt, true),
     serialize({ transactions }),
   )
-  const encryptedArray = new Uint8Array(encrypted)
-  const arrayBuffer = new Uint8Array(
-    IV_AND_SALT_LENGTH + encryptedArray.byteLength,
+
+  if (!(encrypted instanceof ArrayBuffer)) {
+    sendToElm('Toast', 'Incorrect data after encryption')
+    return
+  }
+
+  const encryptedUint8Array = new Uint8Array(encrypted)
+  const uint8ArrayWithSalt = new Uint8Array(
+    IV_AND_SALT_LENGTH + encryptedUint8Array.byteLength,
   )
-  arrayBuffer.set(salt, 0)
-  arrayBuffer.set(iv, SALT_LENGTH)
-  arrayBuffer.set(encryptedArray, IV_AND_SALT_LENGTH)
-  return arrayBuffer
+  uint8ArrayWithSalt.set(salt, 0)
+  uint8ArrayWithSalt.set(iv, SALT_LENGTH)
+  uint8ArrayWithSalt.set(encryptedUint8Array, IV_AND_SALT_LENGTH)
+  return uint8ArrayWithSalt
 }
 
 export const decrypt = async ({
@@ -65,11 +88,11 @@ export const decrypt = async ({
 }: {
   arrayBuffer: Uint8Array
   password: string
-}): Promise<string> => {
+}): Promise<Transactions | undefined> => {
   const salt = arrayBuffer.slice(0, SALT_LENGTH)
   const iv = arrayBuffer.slice(SALT_LENGTH, IV_AND_SALT_LENGTH)
   const encryptedArray = arrayBuffer.slice(IV_AND_SALT_LENGTH)
-  const decrypted = await crypto.subtle.decrypt(
+  const decrypted: unknown = await crypto.subtle.decrypt(
     {
       name: ALGORITHM,
       iv,
@@ -77,6 +100,18 @@ export const decrypt = async ({
     await getEncryptionKey(password, salt),
     encryptedArray,
   )
+
+  if (!(decrypted instanceof ArrayBuffer)) {
+    sendToElm('Toast', 'Decrypted data has wrong format')
+    return
+  }
+
   const { transactions } = deserialize(decrypted)
-  return JSON.stringify(transactions)
+
+  if (!validateTransactions(transactions)) {
+    sendToElm('Toast', 'Deserialized data has wrong format')
+    return
+  }
+
+  return transactions
 }

@@ -1,3 +1,9 @@
 elm-stuff
 dist
 node_modules
+.DS_Store
+.idea
+
+public/avm.wasm
+public/marine-js.wasm
+public/marine-js.web.js

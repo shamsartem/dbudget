@@ -24,6 +24,8 @@
 
 @import "../../View/Confirm.css";
 
+@import "../../View/Toasts.css";
+
 /* pages */
 
 @import "../../Page/NotFound.css";

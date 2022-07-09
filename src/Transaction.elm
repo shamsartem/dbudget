@@ -7,6 +7,7 @@ module Transaction exposing
     , Transaction
     , Transactions
     , csvHeaders
+    , emptyTransactions
     , getAccountsDict
     , getDecimalsDict
     , getDefaultTransactionValue
@@ -18,10 +19,9 @@ module Transaction exposing
     , getTransactions
     , getTransactionsDict
     , insertTransaction
-    , listOfRowsToTransactionsDict
+    , listOfRowsToTransactions
     , mergeTransactions
     , stringToDecimal
-    , stringToTransactionDict
     , toJsonValue
     , toListOfListsOfStrings
     , validateTransactionData
@@ -30,8 +30,7 @@ module Transaction exposing
 import Array exposing (Array)
 import Dict exposing (Dict)
 import Iso8601
-import Json.Decode as Decode
-import Json.Encode as Encode
+import Json.Encode
 import Numeric.ArithmeticError as ArithmeticError exposing (ArithmeticError)
 import Numeric.Decimal as Decimal exposing (Decimal)
 import Numeric.Decimal.Rounding exposing (RoundingAlgorythm(..))
@@ -78,15 +77,9 @@ boolToString bool =
 
 stringToBool : String -> Bool
 stringToBool string =
-    if
-        List.member
-            string
-            [ "true", "True", "TRUE", "1" ]
-    then
-        True
-
-    else
-        False
+    List.member
+        string
+        [ "true", "True", "TRUE", "1" ]
 
 
 type ParseError
@@ -625,18 +618,18 @@ csvHeaders =
     ]
 
 
-toJsonValue : Transactions -> Encode.Value
+toJsonValue : Transactions -> Json.Encode.Value
 toJsonValue (Transactions { transactionsDict }) =
     toListOfListsOfStrings transactionsDict
-        |> Encode.list
+        |> Json.Encode.list
             (\list ->
-                Encode.list
-                    (\value -> Encode.string value)
+                Json.Encode.list
+                    (\value -> Json.Encode.string value)
                     list
             )
 
 
-listOfRowsToTransactionsDict :
+listOfRowsToTransactions :
     UuidSeed
     -> Posix
     -> List (Array String)
@@ -645,7 +638,7 @@ listOfRowsToTransactionsDict :
         , newUuidSeed : UuidSeed
         , transactions : Transactions
         }
-listOfRowsToTransactionsDict uuidSeed timeNow listOfRows =
+listOfRowsToTransactions uuidSeed timeNow listOfRows =
     List.foldl
         (\valueArray { invalidTransactionData, newUuidSeed, transactions } ->
             let
@@ -670,10 +663,10 @@ listOfRowsToTransactionsDict uuidSeed timeNow listOfRows =
                 defaultTransactionValue =
                     { defaultTransactionValueWithoutTime | lastUpdated = timeNow }
 
-                getBoolWithdefault index defaultFn =
+                getBoolWithdefault index getDefault =
                     case Array.get index valueArray of
                         Nothing ->
-                            defaultFn defaultTransactionValue
+                            getDefault defaultTransactionValue
 
                         Just s ->
                             stringToBool s
@@ -681,10 +674,10 @@ listOfRowsToTransactionsDict uuidSeed timeNow listOfRows =
                 isIncome =
                     getBoolWithdefault 0 .isIncome
 
-                getStringWithdefault index defaultFn =
+                getStringWithdefault index getDefault =
                     case Array.get index valueArray of
                         Nothing ->
-                            defaultFn defaultTransactionValue
+                            getDefault defaultTransactionValue
 
                         Just str ->
                             String.trim str
@@ -791,44 +784,38 @@ listOfRowsToTransactionsDict uuidSeed timeNow listOfRows =
         listOfRows
 
 
-type alias TransactionsFromJs =
-    { payload : List (Array String) }
 
-
-
--- used only for transactions from localStorage
-
-
-stringToTransactionDict :
-    UuidSeed
-    -> String
-    ->
-        { invalidTransactionData : List Data
-        , newUuidSeed : UuidSeed
-        , transactions : Transactions
-        }
-stringToTransactionDict uuidSeed string =
-    case
-        Decode.decodeString
-            (Decode.map TransactionsFromJs
-                (Decode.field "payload" (Decode.list (Decode.array Decode.string)))
-            )
-            string
-    of
-        Ok { payload } ->
-            listOfRowsToTransactionsDict
-                uuidSeed
-                (Time.millisToPosix 0)
-                payload
-
-        Err _ ->
-            { invalidTransactionData = []
-            , newUuidSeed = uuidSeed
-            , transactions = emptyTransactions
-            }
-
-
-
+-- type alias TransactionsFromJs =
+--     List (Array String)
+-- -- used only for transactions from localStorage
+-- stringToTransactionDict :
+--     UuidSeed
+--     -> String
+--     ->
+--         { invalidTransactionData : List Data
+--         , newUuidSeed : UuidSeed
+--         , transactions : Transactions
+--         }
+-- stringToTransactionDict uuidSeed string =
+--     case
+--         Json.Decode.decodeString
+--             (Json.Decode.field "payload"
+--                 (Json.Decode.list
+--                     (Json.Decode.array Json.Decode.string)
+--                 )
+--             )
+--             string
+--     of
+--         Ok payload ->
+--             listOfRowsToTransactionsDict
+--                 uuidSeed
+--                 (Time.millisToPosix 0)
+--                 payload
+--         Err _ ->
+--             { invalidTransactionData = []
+--             , newUuidSeed = uuidSeed
+--             , transactions = emptyTransactions
+--             }
 -- UTILS
 
 
@@ -869,17 +856,17 @@ mergeTransactions oldTransactions newTransactionsDict =
             (\k v dict -> Dict.insert k v dict)
             (\k vOld vNew dict ->
                 let
-                    oldValue =
-                        getTransactionData vOld
-
                     newValue =
                         getTransactionData vNew
+
+                    oldValue =
+                        getTransactionData vOld
                 in
-                if Time.posixToMillis oldValue.lastUpdated > Time.posixToMillis newValue.lastUpdated then
-                    Dict.insert k vOld dict
+                if Time.posixToMillis newValue.lastUpdated > Time.posixToMillis oldValue.lastUpdated then
+                    Dict.insert k vNew dict
 
                 else
-                    Dict.insert k vNew dict
+                    Dict.insert k vOld dict
             )
             (\k v dict -> Dict.insert k v dict)
             oldTransactionsDict

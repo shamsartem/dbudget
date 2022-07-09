@@ -1,32 +1,18 @@
-declare type DisplayedTransaction = {
-  name: string
-  category: string
-  date: string
-  price: string
-  id: string
-  isIncome: boolean
-}
-
-declare type CredValue = {
-  username: string
-  deviceName: string
-  password: string
-}
-
 declare type SentFromElmMsg =
-  | 'updatedTransactions'
-  | 'signedIn'
-  | 'refreshAppClicked'
+  | 'UpdatedTransactions'
+  | 'SignedIn'
+  | 'SignedOut'
+  | 'RefreshAppClicked'
 
 declare type ElmApp = {
   ports: {
-    sendFromElm: {
+    sendMessage: {
       subscribe: (
-        callback: (value: { msg: SentFromElmMsg; payload: string }) => void,
+        callback: (value: { tag: SentFromElmMsg; payload: string }) => void,
       ) => void
     }
-    receiveString: {
-      send: (msg: string) => void
+    gotMessage: {
+      send: (msg: { tag: string; payload: unknown }) => void
     }
   }
 }
@@ -46,8 +32,6 @@ declare module '*.elm' {
   }
   export { Elm }
 }
-
-declare module 'virtual:pwa-register'
 
 /**
  * The BeforeInstallPromptEvent is fired at the Window.onbeforeinstallprompt handler

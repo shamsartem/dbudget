@@ -1,92 +1,54 @@
 port module Port exposing
-    ( SentToElm
-    , handleSignIn
-    , parseSentToElmMsg
-    , receiveString
-    , updatedTransactions
-    , refreshApp
-    , installApp
+    ( Message
+    , SendMessage(..)
+    , gotMessage
+    , send
     )
 
-import Json.Decode as Decode
-import Json.Encode as Encode
+import Json.Encode
+import Transaction exposing (Transactions)
 
 
-port sendFromElm : { msg : String, payload : String } -> Cmd msg
+type alias Message =
+    { tag : String, payload : Json.Encode.Value }
 
 
-type alias SentToElm =
-    { msg : String
-    }
+port sendMessage : Message -> Cmd msg
 
 
-port receiveString : (String -> msg) -> Sub msg
+port gotMessage : (Message -> msg) -> Sub msg
 
 
-type SendMsg
-    = UpdatedTransactions
-    | SignedIn
+type SendMessage
+    = UpdatedTransactions Transactions
+    | SignedIn { username : String, password : String, deviceName : String }
+    | SignedOut
     | RefreshApp
-    | InstallApp
 
 
-send : SendMsg -> String -> Cmd msg
-send messageType payload =
-    let
-        msg =
-            case messageType of
-                UpdatedTransactions ->
-                    "updatedTransactions"
+send : SendMessage -> Cmd a
+send msg =
+    (case msg of
+        UpdatedTransactions transactions ->
+            { tag = "UpdatedTransactions"
+            , payload =
+                Transaction.toJsonValue transactions
+            }
 
-                SignedIn ->
-                    "signedIn"
+        SignedIn { username, password, deviceName } ->
+            { tag = "SignedIn"
+            , payload =
+                Json.Encode.object
+                    [ ( "password", Json.Encode.string password )
+                    , ( "username", Json.Encode.string username )
+                    , ( "deviceName", Json.Encode.string deviceName )
+                    ]
+            }
 
-                RefreshApp ->
-                    "refreshAppClicked"
+        SignedOut ->
+            { tag = "SignedOut", payload = Json.Encode.null }
 
-                InstallApp ->
-                    "installApp"
-    in
-    sendFromElm { msg = msg, payload = payload }
-
-
-updatedTransactions : Encode.Value -> String -> String -> Cmd msg
-updatedTransactions transactionEncodeValue password username =
-    Encode.object
-        [ ( "transactions", transactionEncodeValue )
-        , ( "password", Encode.string password )
-        , ( "username", Encode.string username )
-        ]
-        |> Encode.encode 0
-        |> send UpdatedTransactions
-
-
-handleSignIn : String -> Cmd msg
-handleSignIn cred =
-    send SignedIn cred
-
-refreshApp : Cmd msg
-refreshApp =
-    send RefreshApp ""
-
-installApp : Cmd msg
-installApp =
-    send InstallApp ""
-
-parseSentToElmMsg : String -> String
-parseSentToElmMsg message =
-    case
-        Decode.decodeString
-            (Decode.map SentToElm
-                (Decode.field "msg" Decode.string)
-            )
-            message
-    of
-        Ok { msg } ->
-            msg
-
-        Err _ ->
-            -- should never happen because there will always be some
-            -- kind of message coming from js
-            -- even if it as an empty String
-            ""
+        RefreshApp ->
+            { tag = "RefreshApp", payload = Json.Encode.null }
+    )
+        |> sendMessage

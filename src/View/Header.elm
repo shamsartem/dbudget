@@ -17,6 +17,7 @@ type ActiveNav
     | TransactionList
     | CSV
 
+
 baseClass : String
 baseClass =
     "Header"
@@ -41,7 +42,7 @@ view page =
     nav [ class baseClass ]
         [ linkto Route.TransactionList [ text "Transactions" ]
         , linkto Route.CSV [ text "CSV" ]
-        , linkto Route.LogOut [ text "Log out" ]
+        , linkto Route.SignOut [ text "Sign out" ]
         ]
 
 
