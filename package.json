@@ -8,8 +8,8 @@
     "build": "npm run check && vite build",
     "serve": "vite build && vite preview",
     "serve-https": "serve dist",
-    "lint-ts": "eslint src/**/*.ts --fix",
-    "lint-css": "stylelint ./**/*.css --fix",
+    "lint-ts": "eslint ./src/**/*.ts --fix",
+    "lint-css": "stylelint ./src/**/*.css --fix",
     "type-check": "tsc --noEmit",
     "test": "elm-test",
     "check": "npm run lint-ts && npm run lint-css && npm run type-check"
