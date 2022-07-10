@@ -8,7 +8,7 @@ import { store, validateCred } from './store'
 import { app, sendToElm } from './elm'
 import { decrypt, encrypt, validateTransactions } from './transactions'
 import { getEncrypted, dbOpenRequest, TRANSACTIONS } from './idb'
-import { LOCAL_STORAGE_DEVICE_NAME } from './consts'
+import { LOCAL_STORAGE_DEVICE_NAME } from './const'
 
 const updateSW = registerSW({
   onNeedRefresh(): void {
@@ -28,13 +28,13 @@ app.ports.sendMessage.subscribe(
           return
         }
         if (store.cred === null) {
-          sendToElm('Toast', "Can't save to database. You are logged out")
+          sendToElm('Toast', "Can't save to database. You are signed out")
           return
         }
         encrypt(payload, store.cred.password).then(
           (encrypted): void => {
             if (store.cred === null) {
-              sendToElm('Toast', "Can't save to database. You are logged out")
+              sendToElm('Toast', "Can't save to database. You are signed out")
               return
             }
             const db = dbOpenRequest.result
@@ -46,7 +46,11 @@ app.ports.sendMessage.subscribe(
             })
             request.onsuccess = (): void => {
               sendToElm('Toast', 'Saved')
-              sendToAll(encrypted)
+              if (store.cred === null) {
+                sendToElm('Toast', "Can't send saved data. You are signed out")
+                return
+              }
+              sendToAll(encrypted, store.cred.deviceName)
             }
           },
           (error): void => {

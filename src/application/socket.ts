@@ -10,12 +10,14 @@ import { decrypt } from './transactions'
 type Peer = InstanceType<typeof window.SimplePeer>
 
 const peers = new Map<string, Peer>()
+const deviceNames = new Map<string, string>()
 
 export const cleanupPeers = (): void => {
   peers.forEach((peer): void => {
     peer.destroy()
   })
   peers.clear()
+  deviceNames.clear()
 }
 
 const CHUNK_SIZE = 131_072
@@ -26,38 +28,45 @@ type Chunk = {
   }
   dataLength: number
   index: number
+  id: string
+  deviceName: string
 }
 
 const isChunkValid = (unknown: unknown): unknown is Chunk =>
-  hasKeys(unknown, 'subarray', 'index', 'dataLength') &&
+  hasKeys(unknown, 'subarray', 'index', 'dataLength', 'id', 'deviceName') &&
   hasKey(unknown.subarray, 'buffer') &&
   isUint8Array(unknown.subarray.buffer) &&
   typeof unknown.index === 'number' &&
-  typeof unknown.dataLength === 'number'
+  typeof unknown.dataLength === 'number' &&
+  typeof unknown.id === 'string' &&
+  typeof unknown.deviceName === 'string'
 
-const sendChunky = (data: Uint8Array, p: Peer): void => {
+const sendChunky = (data: Uint8Array, p: Peer, deviceName: string): void => {
+  const id = window.crypto.getRandomValues(new Uint32Array(4)).join('')
   for (let index = 0; index < data.length; index += CHUNK_SIZE) {
-    p.send(
-      serialize({
-        subarray: data.subarray(index, index + CHUNK_SIZE),
-        dataLength: data.length,
-        index,
-      }),
-    )
+    const chunk: Omit<Chunk, 'subarray'> & { subarray: Uint8Array } = {
+      subarray: data.slice(index, index + CHUNK_SIZE),
+      dataLength: data.length,
+      index,
+      id,
+      deviceName,
+    }
+    p.send(serialize(chunk))
   }
 }
 
-export const sendToAll = (data: Uint8Array): void => {
+export const sendToAll = (data: Uint8Array, deviceName: string): void => {
   peers.forEach((p): void => {
-    sendChunky(data, p)
+    sendChunky(data, p, deviceName)
   })
 
   if (peers.size === 1) {
-    sendToElm('Toast', 'Sent data to another peer')
-  }
-
-  if (peers.size > 1) {
-    sendToElm('Toast', `Sent data to ${peers.size} peers`)
+    sendToElm(
+      'Toast',
+      `Sent data to ${Array.from(peers.keys())
+        .map((socketId): string => deviceNames.get(socketId) ?? socketId)
+        .join(', ')}`,
+    )
   }
 }
 
@@ -73,8 +82,15 @@ const addListeners = (p: Peer, socketId: string): void => {
         if (encrypted === null) {
           return
         }
-        sendChunky(encrypted, p)
-        sendToElm('Toast', 'Sent data to another peer')
+        if (store.cred === null) {
+          p.destroy()
+          return
+        }
+        sendChunky(encrypted, p, store.cred.deviceName)
+        sendToElm(
+          'Toast',
+          `Sent data to ${deviceNames.get(socketId) ?? socketId}`,
+        )
       })
       .catch((e): void => {
         console.error(e)
@@ -101,8 +117,10 @@ const addListeners = (p: Peer, socketId: string): void => {
     sendToElm('Toast', `Peer communication error ${String(e)}`)
     p.destroy()
     peers.delete(socketId)
+    deviceNames.delete(socketId)
   })
 
+  let sendChunkyId: null | string = null
   let data: Array<Uint8Array> = []
   let currentDataLength = 0
   let wholeDataLength = 0
@@ -121,12 +139,12 @@ const addListeners = (p: Peer, socketId: string): void => {
 
   p.on('data', (arrayBuffer: unknown): void => {
     if (store.cred === null) {
-      cleanUpAndDestroy("Can't process data. You logged out")
+      cleanUpAndDestroy("Can't process data. You are signed out")
       return
     }
 
     if (!(arrayBuffer instanceof Uint8Array)) {
-      cleanUpAndDestroy('Got wrong data from remote. Expected: Buffer')
+      cleanUpAndDestroy('Got wrong data from remote. Expected: Uint8Array')
       return
     }
 
@@ -140,24 +158,23 @@ const addListeners = (p: Peer, socketId: string): void => {
       dataLength,
       index,
       subarray: { buffer: subarray },
+      deviceName,
+      id,
     } = deserializedData
 
-    if (wholeDataLength === 0) {
-      wholeDataLength = dataLength
-    }
+    deviceNames.set(socketId, deviceName)
 
-    if (wholeDataLength !== dataLength) {
-      cleanUpAndDestroy(
-        'Did not finish receiving previous data and got new data already',
-      )
-      return
+    if (sendChunkyId !== id || wholeDataLength !== dataLength) {
+      cleanUp()
+      sendChunkyId = id
+      wholeDataLength = dataLength
     }
 
     data[index] = subarray
     currentDataLength += subarray.length
 
     if (currentDataLength === wholeDataLength) {
-      sendToElm('Toast', 'Got data from another peer')
+      sendToElm('Toast', `Got data from ${deviceName}`)
       const arrayBuffer = new Uint8Array(
         data.flatMap((arr): Array<number> => [...arr]),
       )
@@ -177,6 +194,7 @@ const addListeners = (p: Peer, socketId: string): void => {
   p.on('close', (): void => {
     p.destroy()
     peers.delete(socketId)
+    deviceNames.delete(socketId)
   })
 }
 
