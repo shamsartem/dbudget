@@ -21,6 +21,7 @@ port gotMessage : (Message -> msg) -> Sub msg
 
 type SendMessage
     = UpdatedTransactions Transactions
+    | MergedReceivedTransactions Transactions
     | SignedIn { username : String, password : String, deviceName : String }
     | SignedOut
     | RefreshApp
@@ -31,6 +32,12 @@ send msg =
     (case msg of
         UpdatedTransactions transactions ->
             { tag = "UpdatedTransactions"
+            , payload =
+                Transaction.toJsonValue transactions
+            }
+
+        MergedReceivedTransactions transactions ->
+            { tag = "MergedReceivedTransactions"
             , payload =
                 Transaction.toJsonValue transactions
             }

@@ -337,7 +337,7 @@ update message model =
                     , Cmd.none
                     )
 
-                "GotTransactions" ->
+                "ReceivedTransactions" ->
                     case
                         ( Json.Decode.decodeValue
                             (Json.Decode.list
@@ -354,21 +354,29 @@ update message model =
                                         store.uuidSeed
                                         (Time.millisToPosix 0)
                                         listOfRows
+
+                                mergedTransactions =
+                                    Transaction.mergeTransactions
+                                        signedInData.transactions
+                                        (Transaction.getTransactionsDict transactions)
                             in
                             ( setStore
                                 { store
                                     | signedInData =
                                         Just
                                             { signedInData
-                                                | transactions =
-                                                    Transaction.mergeTransactions
-                                                        signedInData.transactions
-                                                        (Transaction.getTransactionsDict transactions)
+                                                | transactions = mergedTransactions
                                             }
                                     , uuidSeed = newUuidSeed
                                 }
                                 model
-                            , Nav.pushUrl store.navKey (Url.toString store.url)
+                            , Cmd.batch
+                                [ Nav.pushUrl store.navKey (Url.toString store.url)
+                                , Port.send
+                                    (Port.MergedReceivedTransactions
+                                        mergedTransactions
+                                    )
+                                ]
                             )
 
                         _ ->

@@ -19,47 +19,63 @@ const updateSW = registerSW({
   },
 })
 
+const handleTransactionsFromElm = ({
+  payload,
+  doSendToAll = false,
+}: {
+  payload: unknown
+  doSendToAll?: boolean
+}): void => {
+  if (!validateTransactions(payload)) {
+    sendToElm('Toast', "Can't save to database. Wrong data format")
+    return
+  }
+  if (store.cred === null) {
+    sendToElm('Toast', "Can't save to database. You are signed out")
+    return
+  }
+  encrypt(payload, store.cred.password).then(
+    (encrypted): void => {
+      if (store.cred === null) {
+        sendToElm('Toast', "Can't save to database. You are signed out")
+        return
+      }
+      const db = dbOpenRequest.result
+      const transaction = db.transaction(TRANSACTIONS, 'readwrite')
+      const objectStore = transaction.objectStore(TRANSACTIONS)
+      const request = objectStore.put({
+        id: store.cred.username,
+        encrypted,
+      })
+      if (doSendToAll) {
+        request.onsuccess = (): void => {
+          sendToElm('Toast', 'Saved')
+          if (store.cred === null) {
+            sendToElm('Toast', "Can't send saved data. You are signed out")
+            return
+          }
+          sendToAll(encrypted, store.cred.deviceName)
+        }
+      }
+    },
+    (error): void => {
+      sendToElm(
+        'Toast',
+        `Can't save to database. Encryption error: ${String(error)}`,
+      )
+    },
+  )
+}
+
 app.ports.sendMessage.subscribe(
   ({ tag, payload }: { tag: SentFromElmMsg; payload: unknown }): void => {
     switch (tag) {
       case 'UpdatedTransactions': {
-        if (!validateTransactions(payload)) {
-          sendToElm('Toast', "Can't save to database. Wrong data format")
-          return
-        }
-        if (store.cred === null) {
-          sendToElm('Toast', "Can't save to database. You are signed out")
-          return
-        }
-        encrypt(payload, store.cred.password).then(
-          (encrypted): void => {
-            if (store.cred === null) {
-              sendToElm('Toast', "Can't save to database. You are signed out")
-              return
-            }
-            const db = dbOpenRequest.result
-            const transaction = db.transaction(TRANSACTIONS, 'readwrite')
-            const objectStore = transaction.objectStore(TRANSACTIONS)
-            const request = objectStore.put({
-              id: store.cred.username,
-              encrypted,
-            })
-            request.onsuccess = (): void => {
-              sendToElm('Toast', 'Saved')
-              if (store.cred === null) {
-                sendToElm('Toast', "Can't send saved data. You are signed out")
-                return
-              }
-              sendToAll(encrypted, store.cred.deviceName)
-            }
-          },
-          (error): void => {
-            sendToElm(
-              'Toast',
-              `Can't save to database. Encryption error: ${String(error)}`,
-            )
-          },
-        )
+        handleTransactionsFromElm({ payload, doSendToAll: true })
+        break
+      }
+      case 'MergedReceivedTransactions': {
+        handleTransactionsFromElm({ payload })
         break
       }
       case 'SignedIn': {

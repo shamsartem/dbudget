@@ -3,6 +3,7 @@ declare type SentFromElmMsg =
   | 'SignedIn'
   | 'SignedOut'
   | 'RefreshAppClicked'
+  | 'MergedReceivedTransactions'
 
 declare type ElmApp = {
   ports: {

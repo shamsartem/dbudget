@@ -60,14 +60,12 @@ export const sendToAll = (data: Uint8Array, deviceName: string): void => {
     sendChunky(data, p, deviceName)
   })
 
-  if (peers.size === 1) {
-    sendToElm(
-      'Toast',
-      `Sent data to ${Array.from(peers.keys())
-        .map((socketId): string => deviceNames.get(socketId) ?? socketId)
-        .join(', ')}`,
-    )
-  }
+  sendToElm(
+    'Toast',
+    `Sent data to ${Array.from(peers.keys())
+      .map((socketId): string => deviceNames.get(socketId) ?? socketId)
+      .join(', ')}`,
+  )
 }
 
 const addListeners = (p: Peer, socketId: string): void => {
@@ -180,7 +178,7 @@ const addListeners = (p: Peer, socketId: string): void => {
       )
       decrypt({ arrayBuffer, password: store.cred.password })
         .then((transactions): void => {
-          sendToElm('GotTransactions', transactions)
+          sendToElm('ReceivedTransactions', transactions)
           cleanUp()
         })
         .catch((): void => {

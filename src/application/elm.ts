@@ -25,7 +25,7 @@ export const sendToElm = (
     | 'NeedRefresh'
     | 'OfflineReady'
     | 'Toast'
-    | 'GotTransactions',
+    | 'ReceivedTransactions',
   payload: unknown = null,
 ): void => {
   app.ports.gotMessage.send({ tag, payload })
