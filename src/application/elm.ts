@@ -15,6 +15,7 @@ export const app = Elm.Main.init({
     seedAndExtension: [...randomIntegers.slice(0, 1), randomIntegers.slice(1)],
     deviceName: localStorage.getItem(LOCAL_STORAGE_DEVICE_NAME) ?? '',
     windowWidth: window.innerWidth,
+    navigatorLanguage: navigator.language,
   },
 })
 

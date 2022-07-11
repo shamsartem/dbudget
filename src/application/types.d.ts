@@ -27,6 +27,7 @@ declare module '*.elm' {
           seedAndExtension: (number | number[])[]
           deviceName: string
           windowWidth: number
+          navigatorLanguage: string
         }
       }) => ElmApp
     }

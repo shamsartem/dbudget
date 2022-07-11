@@ -38,17 +38,17 @@ routeParser =
 
 href : Route -> Attribute msg
 href targetroute =
-    Attr.href (routetostring targetroute)
+    Attr.href (routeToString targetroute)
 
 
 replaceUrl : Nav.Key -> Route -> Cmd msg
 replaceUrl key route =
-    Nav.replaceUrl key (routetostring route)
+    Nav.replaceUrl key (routeToString route)
 
 
 pushUrl : Nav.Key -> Route -> Cmd msg
 pushUrl key route =
-    Nav.pushUrl key (routetostring route)
+    Nav.pushUrl key (routeToString route)
 
 
 fromUrl : Url -> Maybe Route
@@ -60,13 +60,13 @@ fromUrl url =
 -- internal
 
 
-routetostring : Route -> String
-routetostring page =
-    "/" ++ String.join "/" (routetopath page)
+routeToString : Route -> String
+routeToString page =
+    "/" ++ String.join "/" (routeToPath page)
 
 
-routetopath : Route -> List String
-routetopath page =
+routeToPath : Route -> List String
+routeToPath page =
     case page of
         TransactionList ->
             []

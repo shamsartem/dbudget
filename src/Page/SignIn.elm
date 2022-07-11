@@ -235,6 +235,7 @@ view model =
                 }
             , button [ class "button", disabled isDisabled ] [ text "Sign in" ]
             ]
+        , div [ c "version" ] [ text "Version 0.0.1" ]
         ]
 
 

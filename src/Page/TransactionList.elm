@@ -15,7 +15,7 @@ module Page.TransactionList exposing
 import Browser.Dom exposing (focus)
 import Cldr.Format.Date as FormatDate
 import Cldr.Format.Length as Length
-import Cldr.Locale as Locale
+import Cldr.Locale exposing (Locale)
 import Date
 import Dialog.TransactionDialog as TransactionDialog
 import Html exposing (..)
@@ -35,6 +35,7 @@ import View.Input as Input
 type alias DisplayedTransaction =
     { category : String
     , date : String
+    , localizedDate : String
     , id : Uuid
     , isIncome : Bool
     , name : String
@@ -113,8 +114,9 @@ c elementAndOrModifier =
 
 transactionsToDisplayedTransactions :
     Transaction.Transactions
+    -> Locale
     -> List DisplayedTransaction
-transactionsToDisplayedTransactions transactions =
+transactionsToDisplayedTransactions transactions locale =
     let
         notDeletedTransactionDataList =
             Transaction.getNotDeletedTransactionDataList transactions
@@ -137,10 +139,23 @@ transactionsToDisplayedTransactions transactions =
                                 transactionData
                                 decimalsDict
                             )
+
+                    localizedDate =
+                        case Date.fromIsoString date of
+                            Ok d ->
+                                FormatDate.format
+                                    (FormatDate.WithLength Length.Medium)
+                                    locale
+                                    d
+
+                            -- should never happen because we validate
+                            Err _ ->
+                                "Invalid date"
                 in
                 { isIncome = isIncome
                 , price = fullPrice
                 , date = date
+                , localizedDate = localizedDate
                 , category = category
                 , account = account
                 , name = name
@@ -183,8 +198,8 @@ filterDisplayedTransactions initialSearch displayedTransactions =
 
     else
         List.filter
-            (\{ date, category, name, account, isIncome, price } ->
-                [ date, category, name, account, price ]
+            (\{ localizedDate, category, name, account, isIncome, price } ->
+                [ localizedDate, category, name, account, price ]
                     |> List.any
                         (\text ->
                             (text
@@ -338,7 +353,7 @@ init initType store signedInData =
                     )
 
         allTransactions =
-            transactionsToDisplayedTransactions signedInData.transactions
+            transactionsToDisplayedTransactions signedInData.transactions store.locale
     in
     ( { dialogModel = transactionDialogModel
       , allTransactions = allTransactions
@@ -390,7 +405,7 @@ headerView search isPlaceholder =
 
 
 transactionItemView : DisplayedTransaction -> Html Msg
-transactionItemView { date, category, account, name, price, id, isIncome } =
+transactionItemView { localizedDate, date, category, account, name, price, id, isIncome } =
     div
         [ c "item"
         , style "height" (String.fromInt itemHeight ++ "px")
@@ -399,19 +414,7 @@ transactionItemView { date, category, account, name, price, id, isIncome } =
         [ div [ c "itemSection" ]
             [ div [ c "itemValue" ] [ text name ]
             , time [ datetime date, c "itemValue", c "itemValue__time" ]
-                [ text
-                    (case Date.fromIsoString date of
-                        Ok d ->
-                            FormatDate.format
-                                (FormatDate.WithLength Length.Medium)
-                                Locale.en_GB
-                                d
-
-                        -- should never happen because we validate
-                        Err _ ->
-                            "Invalid date"
-                    )
-                ]
+                [ text localizedDate ]
             ]
         , div [ c "itemSection" ]
             [ div [ c "itemValue" ] [ text category ]

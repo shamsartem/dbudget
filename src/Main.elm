@@ -3,6 +3,7 @@ module Main exposing (Model, main)
 import Browser exposing (Document)
 import Browser.Events exposing (onResize)
 import Browser.Navigation as Nav
+import Cldr.Locale as Locale
 import Html exposing (..)
 import Json.Decode
 import Page.CSV as CSV
@@ -27,6 +28,7 @@ type alias Flags =
     { seedAndExtension : UuidSeed.SeedAndExtension
     , deviceName : String
     , windowWidth : Int
+    , navigatorLanguage : String
     }
 
 
@@ -42,7 +44,7 @@ type Model
 
 
 initialModel : Maybe UuidSeed -> Flags -> Url -> Nav.Key -> ( Model, Cmd Msg )
-initialModel maybeSeed { seedAndExtension, deviceName, windowWidth } url key =
+initialModel maybeSeed { seedAndExtension, deviceName, windowWidth, navigatorLanguage } url key =
     let
         store : Store
         store =
@@ -58,12 +60,30 @@ initialModel maybeSeed { seedAndExtension, deviceName, windowWidth } url key =
             , isRefreshWindowVisible = False
             , isOfflineReadyWindowVisible = False
             , currentTimeZone = Time.utc
+            , locale =
+                Maybe.withDefault Locale.en
+                    (Locale.fromString Locale.allLocales navigatorLanguage)
             , toasts = []
             }
     in
     case Route.fromUrl url of
         Nothing ->
             ( NotFound store, Cmd.none )
+
+        Just Route.SignOut ->
+            let
+                ( signInModel, signInCommand ) =
+                    SignIn.init store
+            in
+            ( SignIn signInModel
+            , Cmd.batch
+                [ Cmd.map GotSignInMsg signInCommand
+                , Task.perform GotTimeZone Time.here
+                , Route.pushUrl
+                    store.navKey
+                    Route.TransactionList
+                ]
+            )
 
         Just _ ->
             let
@@ -78,10 +98,6 @@ initialModel maybeSeed { seedAndExtension, deviceName, windowWidth } url key =
             )
 
 
-{-| 3.: To get enough bytes of randomness (128 bit), we have to pass at least 4 32-bit ints from JavaScript
-via flags. Here we pass 5, since having a seedExtension of a size that is a power of 2 results
-in slightly faster performance.
--}
 init : Flags -> Url -> Nav.Key -> ( Model, Cmd Msg )
 init flags url key =
     initialModel Nothing flags url key
@@ -258,12 +274,13 @@ changeRouteTo maybeRoute store =
                         ( m, cmd ) =
                             initialModel
                                 (Just store.uuidSeed)
-                                -- seed and extension  ( 0, [ 0 ] ) is not
-                                -- actually used because Just above
-                                -- but it is needed to typecheck
-                                { seedAndExtension = ( 0, [ 0 ] )
+                                { -- seed and extension  ( 0, [ 0 ] ) is not
+                                  -- actually used because of the Just above
+                                  -- but it is needed to typecheck
+                                  seedAndExtension = ( 0, [ 0 ] )
                                 , deviceName = store.deviceName
                                 , windowWidth = store.windowWidth
+                                , navigatorLanguage = Locale.toUnicode store.locale
                                 }
                                 store.url
                                 store.navKey
