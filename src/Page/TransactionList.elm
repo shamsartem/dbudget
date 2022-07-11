@@ -13,10 +13,6 @@ module Page.TransactionList exposing
     )
 
 import Browser.Dom exposing (focus)
-import Cldr.Format.Date as FormatDate
-import Cldr.Format.Length as Length
-import Cldr.Locale
-import Date
 import Dialog.TransactionDialog as TransactionDialog
 import Html exposing (..)
 import Html.Attributes exposing (attribute, class, classList, datetime, id, style)
@@ -35,7 +31,6 @@ import View.Input as Input
 type alias DisplayedTransaction =
     { category : String
     , date : String
-    , localizedDate : String
     , id : Uuid
     , isIncome : Bool
     , name : String
@@ -138,23 +133,10 @@ transactionsToDisplayedTransactions transactions =
                                 transactionData
                                 decimalsDict
                             )
-
-                    localizedDate =
-                        case Date.fromIsoString date of
-                            Ok d ->
-                                FormatDate.format
-                                    (FormatDate.WithLength Length.Medium)
-                                    Cldr.Locale.en
-                                    d
-
-                            -- should never happen because we validate
-                            Err _ ->
-                                "Invalid date"
                 in
                 { isIncome = isIncome
                 , price = fullPrice
                 , date = date
-                , localizedDate = localizedDate
                 , category = category
                 , account = account
                 , name = name
@@ -197,8 +179,8 @@ filterDisplayedTransactions initialSearch displayedTransactions =
 
     else
         List.filter
-            (\{ localizedDate, category, name, account, isIncome, price } ->
-                [ localizedDate, category, name, account, price ]
+            (\{ date, category, name, account, isIncome, price } ->
+                [ date, category, name, account, price ]
                     |> List.any
                         (\text ->
                             (text
@@ -404,7 +386,7 @@ headerView search isPlaceholder =
 
 
 transactionItemView : DisplayedTransaction -> Html Msg
-transactionItemView { localizedDate, date, category, account, name, price, id, isIncome } =
+transactionItemView { date, category, account, name, price, id, isIncome } =
     div
         [ c "item"
         , style "height" (String.fromInt itemHeight ++ "px")
@@ -413,7 +395,7 @@ transactionItemView { localizedDate, date, category, account, name, price, id, i
         [ div [ c "itemSection" ]
             [ div [ c "itemValue" ] [ text name ]
             , time [ datetime date, c "itemValue", c "itemValue__time" ]
-                [ text localizedDate ]
+                [ text date ]
             ]
         , div [ c "itemSection" ]
             [ div [ c "itemValue" ] [ text category ]

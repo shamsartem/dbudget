@@ -13,9 +13,6 @@ module Dialog.TransactionDialog exposing
 
 import Browser.Dom exposing (focus)
 import Browser.Events exposing (onKeyDown)
-import Cldr.Format.DateTime as DateTime
-import Cldr.Format.Length as Length
-import Cldr.Locale as Locale
 import Dict
 import Html exposing (..)
 import Html.Attributes exposing (attribute, class, datetime, disabled, for, id, novalidate, tabindex, type_)
@@ -407,18 +404,7 @@ viewLastUpdated dialog currentTimeZone lastUpdated =
             div [ c "lastUpdated" ]
                 [ text "Last updated: "
                 , time [ datetime (Iso8601.fromTime lastUpdated) ]
-                    [ text
-                        (DateTime.format
-                            (DateTime.DateAndTime
-                                { date = Length.Medium
-                                , time = Length.Medium
-                                }
-                            )
-                            Locale.en_GB
-                            currentTimeZone
-                            lastUpdated
-                        )
-                    ]
+                    [ text (Iso8601.fromTime lastUpdated) ]
                 ]
     in
     case dialog of

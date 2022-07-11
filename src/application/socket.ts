@@ -56,6 +56,10 @@ const sendChunky = (data: Uint8Array, p: Peer, deviceName: string): void => {
 }
 
 export const sendToAll = (data: Uint8Array, deviceName: string): void => {
+  if (peers.size === 0) {
+    return
+  }
+
   peers.forEach((p): void => {
     sendChunky(data, p, deviceName)
   })
