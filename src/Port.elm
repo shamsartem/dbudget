@@ -56,6 +56,6 @@ send msg =
             { tag = "SignedOut", payload = Json.Encode.null }
 
         RefreshApp ->
-            { tag = "RefreshApp", payload = Json.Encode.null }
+            { tag = "RefreshAppClicked", payload = Json.Encode.null }
     )
         |> sendMessage
