@@ -14,7 +14,6 @@ import Time
 import Transaction
 import Url exposing (Url)
 import UuidSeed exposing (UuidSeed)
-import Cldr.Locale exposing (Locale)
 
 
 type alias SignedInData =
@@ -34,7 +33,6 @@ type alias Store =
     , isOfflineReadyWindowVisible : Bool
     , currentTimeZone : Time.Zone
     , toasts : List String
-    , locale : Locale
     }
 
 

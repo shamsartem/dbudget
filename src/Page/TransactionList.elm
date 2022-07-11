@@ -15,7 +15,7 @@ module Page.TransactionList exposing
 import Browser.Dom exposing (focus)
 import Cldr.Format.Date as FormatDate
 import Cldr.Format.Length as Length
-import Cldr.Locale exposing (Locale)
+import Cldr.Locale
 import Date
 import Dialog.TransactionDialog as TransactionDialog
 import Html exposing (..)
@@ -114,9 +114,8 @@ c elementAndOrModifier =
 
 transactionsToDisplayedTransactions :
     Transaction.Transactions
-    -> Locale
     -> List DisplayedTransaction
-transactionsToDisplayedTransactions transactions locale =
+transactionsToDisplayedTransactions transactions =
     let
         notDeletedTransactionDataList =
             Transaction.getNotDeletedTransactionDataList transactions
@@ -145,7 +144,7 @@ transactionsToDisplayedTransactions transactions locale =
                             Ok d ->
                                 FormatDate.format
                                     (FormatDate.WithLength Length.Medium)
-                                    locale
+                                    Cldr.Locale.en
                                     d
 
                             -- should never happen because we validate
@@ -353,7 +352,7 @@ init initType store signedInData =
                     )
 
         allTransactions =
-            transactionsToDisplayedTransactions signedInData.transactions store.locale
+            transactionsToDisplayedTransactions signedInData.transactions
     in
     ( { dialogModel = transactionDialogModel
       , allTransactions = allTransactions

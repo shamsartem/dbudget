@@ -3,7 +3,6 @@ module Main exposing (Model, main)
 import Browser exposing (Document)
 import Browser.Events exposing (onResize)
 import Browser.Navigation as Nav
-import Cldr.Locale as Locale
 import Html exposing (..)
 import Json.Decode
 import Page.CSV as CSV
@@ -28,7 +27,6 @@ type alias Flags =
     { seedAndExtension : UuidSeed.SeedAndExtension
     , deviceName : String
     , windowWidth : Int
-    , navigatorLanguage : String
     }
 
 
@@ -44,7 +42,7 @@ type Model
 
 
 initialModel : Maybe UuidSeed -> Flags -> Url -> Nav.Key -> ( Model, Cmd Msg )
-initialModel maybeSeed { seedAndExtension, deviceName, windowWidth, navigatorLanguage } url key =
+initialModel maybeSeed { seedAndExtension, deviceName, windowWidth } url key =
     let
         store : Store
         store =
@@ -60,9 +58,6 @@ initialModel maybeSeed { seedAndExtension, deviceName, windowWidth, navigatorLan
             , isRefreshWindowVisible = False
             , isOfflineReadyWindowVisible = False
             , currentTimeZone = Time.utc
-            , locale =
-                Maybe.withDefault Locale.en
-                    (Locale.fromString Locale.allLocales navigatorLanguage)
             , toasts = []
             }
     in
@@ -280,7 +275,6 @@ changeRouteTo maybeRoute store =
                                   seedAndExtension = ( 0, [ 0 ] )
                                 , deviceName = store.deviceName
                                 , windowWidth = store.windowWidth
-                                , navigatorLanguage = Locale.toUnicode store.locale
                                 }
                                 store.url
                                 store.navKey
