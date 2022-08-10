@@ -20,7 +20,8 @@ port gotMessage : (Message -> msg) -> Sub msg
 
 
 type SendMessage
-    = UpdatedTransactions Transactions
+    = UpdatedTransactions Transactions Transactions
+    | GotHelloBack { transactions : Transactions, socketId : String }
     | MergedReceivedTransactions Transactions
     | SignedIn { username : String, password : String, deviceName : String }
     | SignedOut
@@ -30,10 +31,22 @@ type SendMessage
 send : SendMessage -> Cmd a
 send msg =
     (case msg of
-        UpdatedTransactions transactions ->
+        UpdatedTransactions transactions newTransactions ->
             { tag = "UpdatedTransactions"
             , payload =
-                Transaction.toJsonValue transactions
+                Json.Encode.object
+                    [ ( "transactions", Transaction.toJsonValue transactions )
+                    , ( "newTransactions", Transaction.toJsonValue newTransactions )
+                    ]
+            }
+
+        GotHelloBack { transactions, socketId } ->
+            { tag = "GotHelloBack"
+            , payload =
+                Json.Encode.object
+                    [ ( "transactions", Transaction.toJsonValue transactions )
+                    , ( "socketId", Json.Encode.string socketId )
+                    ]
             }
 
         MergedReceivedTransactions transactions ->

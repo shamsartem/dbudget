@@ -397,8 +397,8 @@ viewMessage message =
         ]
 
 
-viewLastUpdated : Dialog -> Time.Zone -> Posix -> Html Msg
-viewLastUpdated dialog currentTimeZone lastUpdated =
+viewLastUpdated : Dialog -> Posix -> Html Msg
+viewLastUpdated dialog lastUpdated =
     let
         lastUpdatedText =
             div [ c "lastUpdated" ]
@@ -841,9 +841,7 @@ viewTransactionForm dialogData dialog model leftButton =
                                     [ text errorText ]
                                 ]
                     , buttons
-                    , viewLastUpdated dialog
-                        model.store.currentTimeZone
-                        transactionData.lastUpdated
+                    , viewLastUpdated dialog transactionData.lastUpdated
                     ]
                 , case confirmType of
                     NoConfirm ->
@@ -1407,7 +1405,14 @@ update msg model =
                             ( { model | store = { store | signedInData = newSignedInData } }
                             , Cmd.batch
                                 [ pushUrlBack
-                                , Port.send (Port.UpdatedTransactions newTransactions)
+                                , Port.send
+                                    (Port.UpdatedTransactions
+                                        newTransactions
+                                        (Transaction.insertTransaction
+                                            Transaction.emptyTransactions
+                                            transaction
+                                        )
+                                    )
                                 ]
                             )
 

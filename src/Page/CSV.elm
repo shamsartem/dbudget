@@ -288,6 +288,7 @@ update msg model =
                                 [ Port.send
                                     (Port.UpdatedTransactions
                                         newTransactions
+                                        transactions
                                     )
                                 , cmd
                                 ]

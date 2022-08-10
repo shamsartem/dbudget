@@ -57,7 +57,6 @@ initialModel maybeSeed { seedAndExtension, deviceName, windowWidth } url key =
             , windowWidth = windowWidth
             , isRefreshWindowVisible = False
             , isOfflineReadyWindowVisible = False
-            , currentTimeZone = Time.utc
             , toasts = []
             }
     in
@@ -73,7 +72,6 @@ initialModel maybeSeed { seedAndExtension, deviceName, windowWidth } url key =
             ( SignIn signInModel
             , Cmd.batch
                 [ Cmd.map GotSignInMsg signInCommand
-                , Task.perform GotTimeZone Time.here
                 , Route.pushUrl
                     store.navKey
                     Route.TransactionList
@@ -88,7 +86,6 @@ initialModel maybeSeed { seedAndExtension, deviceName, windowWidth } url key =
             ( SignIn signInModel
             , Cmd.batch
                 [ Cmd.map GotSignInMsg signInCommand
-                , Task.perform GotTimeZone Time.here
                 ]
             )
 
@@ -191,7 +188,6 @@ type Msg
     | OkOfflineReadyClicked
     | RefreshClicked
     | CancelRefreshClicked
-    | GotTimeZone Time.Zone
     | RemoveToast
 
 
@@ -382,7 +378,12 @@ update message model =
                                 }
                                 model
                             , Cmd.batch
-                                [ Nav.pushUrl store.navKey (Url.toString store.url)
+                                [ case Route.fromUrl store.url of
+                                    Just (Route.Transaction _) ->
+                                        Cmd.none
+
+                                    _ ->
+                                        Nav.pushUrl store.navKey (Url.toString store.url)
                                 , Port.send
                                     (Port.MergedReceivedTransactions
                                         mergedTransactions
@@ -410,6 +411,27 @@ update message model =
                             -- js should always send string toast
                             ( model, Cmd.none )
 
+                "GotHelloBack" ->
+                    case
+                        ( payload
+                            |> Json.Decode.decodeValue Json.Decode.string
+                        , store.signedInData
+                        )
+                    of
+                        ( Ok socketId, Just signedInData ) ->
+                            ( model
+                            , Port.send
+                                (Port.GotHelloBack
+                                    { socketId = socketId
+                                    , transactions = signedInData.transactions
+                                    }
+                                )
+                            )
+
+                        _ ->
+                            -- js should always send string toast
+                            ( model, Cmd.none )
+
                 _ ->
                     ( model, Cmd.none )
 
@@ -433,13 +455,6 @@ update message model =
         ( CancelRefreshClicked, _ ) ->
             ( setStore
                 { store | isRefreshWindowVisible = False }
-                model
-            , Cmd.none
-            )
-
-        ( GotTimeZone zone, _ ) ->
-            ( setStore
-                { store | currentTimeZone = zone }
                 model
             , Cmd.none
             )

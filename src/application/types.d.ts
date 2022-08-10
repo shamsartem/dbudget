@@ -4,6 +4,7 @@ declare type SentFromElmMsg =
   | 'SignedOut'
   | 'RefreshAppClicked'
   | 'MergedReceivedTransactions'
+  | 'GotHelloBack'
 
 declare type ElmApp = {
   ports: {

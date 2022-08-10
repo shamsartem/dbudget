@@ -10,7 +10,6 @@ module Store exposing
 
 import Browser.Navigation as Nav
 import Prng.Uuid exposing (Uuid)
-import Time
 import Transaction
 import Url exposing (Url)
 import UuidSeed exposing (UuidSeed)
@@ -31,7 +30,6 @@ type alias Store =
     , windowWidth : Int
     , isRefreshWindowVisible : Bool
     , isOfflineReadyWindowVisible : Bool
-    , currentTimeZone : Time.Zone
     , toasts : List String
     }
 

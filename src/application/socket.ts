@@ -1,204 +1,307 @@
-import { io } from 'socket.io-client'
-import { deserialize, serialize } from 'bson'
+import { Buffer } from 'buffer'
 
-import { hasKey, hasKeys, isUint8Array } from './typeHelpers'
-import { getEncrypted } from './idb'
+import { io } from 'socket.io-client'
+import type { JSONSchemaType } from 'ajv'
+
 import { sendToElm } from './elm'
 import { store } from './store'
-import { decrypt } from './transactions'
+import { Transactions, transactionsSchema } from './transactions'
+import { ajv } from './ajv'
+import { compressString, decompress, decrypt, encrypt } from './crypto'
 
-type Peer = InstanceType<typeof window.SimplePeer>
+type SimplePeerInstance = InstanceType<typeof window.SimplePeer>
 
-const peers = new Map<string, Peer>()
-const deviceNames = new Map<string, string>()
+type PeerMessage =
+  | {
+      msg: 'hello'
+      payload: {
+        deviceName: string
+        dataToDecrypt: string
+      }
+    }
+  | {
+      msg: 'helloBack'
+      payload: {
+        decryptedData: string
+      }
+    }
+  | {
+      msg: 'transactions'
+      payload: Transactions
+    }
+  | {
+      msg: 'finishedSendingTransactions'
+    }
+  | {
+      msg: 'backedUpTransactions'
+    }
+
+const peerMessageSchema: JSONSchemaType<PeerMessage> = {
+  type: 'object',
+  oneOf: [
+    {
+      properties: {
+        msg: { type: 'string', enum: ['hello'] },
+        payload: {
+          type: 'object',
+          properties: {
+            deviceName: { type: 'string' },
+            dataToDecrypt: { type: 'string' },
+          },
+        },
+      },
+    },
+    {
+      properties: {
+        msg: { type: 'string', enum: ['helloBack'] },
+        payload: {
+          type: 'object',
+          properties: {
+            latestTransactionTimestamp: { type: 'string' },
+            decryptedData: { type: 'string' },
+          },
+        },
+      },
+    },
+    {
+      properties: {
+        msg: { type: 'string', enum: ['transactions'] },
+        payload: transactionsSchema,
+      },
+    },
+    {
+      properties: {
+        msg: { type: 'string', enum: ['finishedSendingTransactions'] },
+      },
+    },
+    {
+      properties: {
+        msg: { type: 'string', enum: ['backedUpTransactions'] },
+      },
+    },
+  ],
+  required: ['msg'],
+}
+
+const validatePeerMessage = ajv.compile(peerMessageSchema)
+
+class Peer {
+  dataToEncrypt: string
+  socketId: string
+  deviceName?: string
+  #isTrusted = false
+  #p: SimplePeerInstance
+  constructor({
+    initiator,
+    socketId,
+  }: {
+    initiator: boolean
+    socketId: string
+  }) {
+    this.socketId = socketId
+    this.dataToEncrypt = window.crypto.randomUUID()
+    this.#p = new window.SimplePeer({
+      initiator,
+      trickle: false,
+      objectMode: true,
+    })
+    this.#p.on('error', (): void => {
+      this.cleanUpAndDestroy()
+    })
+    this.#p.on('close', (): void => {
+      this.cleanUpAndDestroy()
+    })
+    this.#p.on('signal', (signalData): void => {
+      if (store.cred === null) {
+        this.cleanUpAndDestroy()
+        return
+      }
+
+      sendSocket({
+        msg: 'signal',
+        payload: {
+          signalData: JSON.stringify(signalData),
+          socketId,
+          username: store.cred.username,
+        },
+      })
+    })
+    this.#p.on('data', (data): void => {
+      if (typeof data !== 'string') {
+        this.cleanUpAndDestroy()
+        return
+      }
+      decompress(data)
+        .then((data): void => {
+          if (store.cred === null || typeof data !== 'string') {
+            this.cleanUpAndDestroy()
+            return
+          }
+          const parsedData: unknown = JSON.parse(data)
+          if (!validatePeerMessage(parsedData)) {
+            sendToElm(
+              'Toast',
+              `Peer sent invalid data: ${JSON.stringify(parsedData)}`,
+            )
+            return
+          }
+
+          switch (parsedData.msg) {
+            case 'hello': {
+              const { dataToDecrypt } = parsedData.payload
+              this.deviceName = parsedData.payload.deviceName
+              decrypt(
+                new Uint8Array(Buffer.from(dataToDecrypt, 'base64')),
+                store.cred.password,
+              )
+                .then((decryptedData): void => {
+                  if (typeof decryptedData !== 'string') {
+                    throw new Error(
+                      `Decrypted is not string: ${String(decryptedData)}`,
+                    )
+                  }
+                  this.write({
+                    msg: 'helloBack',
+                    payload: {
+                      decryptedData,
+                    },
+                  })
+                })
+                .catch((): void => {
+                  sendToElm(
+                    'Toast',
+                    'Make sure you use the same password with all of your devices',
+                  )
+                })
+              break
+            }
+            case 'helloBack': {
+              if (parsedData.payload.decryptedData !== this.dataToEncrypt) {
+                sendToElm('Toast', 'Somebody is hacking you!')
+                this.cleanUpAndDestroy()
+                return
+              }
+              this.#isTrusted = true
+              sendToElm('GotHelloBack', this.socketId)
+              break
+            }
+
+            case 'transactions': {
+              sendToElm('ReceivedTransactions', parsedData.payload)
+              break
+            }
+
+            case 'finishedSendingTransactions': {
+              sendToElm(
+                'Toast',
+                `Got transactions from ${this.deviceName ?? ''}`,
+              )
+              this.write({
+                msg: 'backedUpTransactions',
+              })
+              break
+            }
+
+            case 'backedUpTransactions': {
+              sendToElm(
+                'Toast',
+                `${this.deviceName ?? ''} backed up transactions from us`,
+              )
+              break
+            }
+
+            default: {
+              const _exhaustiveCheck: never = parsedData
+              return _exhaustiveCheck
+            }
+          }
+        })
+        .catch((): void => {
+          sendToElm('Toast', 'Unable to decompress data')
+        })
+    })
+    this.#hello().catch((e): void => {
+      sendToElm('Toast', `Can't send hello: ${String(e)}`)
+    })
+  }
+  cleanUpAndDestroy(): void {
+    this.destroy()
+    peersBySocketId.delete(this.socketId)
+  }
+  async #hello(): Promise<void> {
+    if (store.cred === null) {
+      this.cleanUpAndDestroy()
+      return
+    }
+    this.write({
+      msg: 'hello',
+      payload: {
+        dataToDecrypt: Buffer.from(
+          await encrypt(this.dataToEncrypt, store.cred.password),
+        ).toString('base64'),
+        deviceName: store.cred.deviceName,
+      },
+    })
+  }
+  signal(...args: Parameters<SimplePeerInstance['signal']>): void {
+    this.#p.signal(...args)
+  }
+  destroy(...args: Parameters<SimplePeerInstance['destroy']>): void {
+    this.#p.destroy(...args)
+  }
+  write(message: PeerMessage): void {
+    if (!['hello', 'helloBack'].includes(message.msg) && !this.#isTrusted) {
+      return
+    }
+    compressString(JSON.stringify(message))
+      .then((compressedMessage): void => {
+        this.#p.write(compressedMessage)
+      })
+      .catch((e): void => {
+        console.error(`Not able to compress message: ${String(e)}`)
+      })
+  }
+}
+
+const peersBySocketId = new Map<string, Peer>()
 
 export const cleanupPeers = (): void => {
-  peers.forEach((peer): void => {
+  peersBySocketId.forEach((peer): void => {
     peer.destroy()
   })
-  peers.clear()
-  deviceNames.clear()
+  peersBySocketId.clear()
 }
 
-const CHUNK_SIZE = 131_072
-
-type Chunk = {
-  subarray: {
-    buffer: Uint8Array
-  }
-  dataLength: number
-  index: number
-  id: string
-  deviceName: string
-}
-
-const isChunkValid = (unknown: unknown): unknown is Chunk =>
-  hasKeys(unknown, 'subarray', 'index', 'dataLength', 'id', 'deviceName') &&
-  hasKey(unknown.subarray, 'buffer') &&
-  isUint8Array(unknown.subarray.buffer) &&
-  typeof unknown.index === 'number' &&
-  typeof unknown.dataLength === 'number' &&
-  typeof unknown.id === 'string' &&
-  typeof unknown.deviceName === 'string'
-
-const sendChunky = (data: Uint8Array, p: Peer, deviceName: string): void => {
-  const id = window.crypto.getRandomValues(new Uint32Array(4)).join('')
-  for (let index = 0; index < data.length; index += CHUNK_SIZE) {
-    const chunk: Omit<Chunk, 'subarray'> & { subarray: Uint8Array } = {
-      subarray: data.slice(index, index + CHUNK_SIZE),
-      dataLength: data.length,
-      index,
-      id,
-      deviceName,
-    }
-    p.send(serialize(chunk))
-  }
-}
-
-export const sendToAll = (data: Uint8Array, deviceName: string): void => {
-  if (peers.size === 0) {
+export const sendTransactionsToAll = (transactions: Transactions): void => {
+  if (peersBySocketId.size === 0) {
     return
   }
 
-  peers.forEach((p): void => {
-    sendChunky(data, p, deviceName)
+  peersBySocketId.forEach((peer): void => {
+    sendTransactionsToPeer(peer.socketId, transactions)
   })
-
-  sendToElm(
-    'Toast',
-    `Sent data to ${Array.from(peers.keys())
-      .map((socketId): string => deviceNames.get(socketId) ?? socketId)
-      .join(', ')}`,
-  )
 }
 
-const addListeners = (p: Peer, socketId: string): void => {
-  p.on('connect', (): void => {
-    if (store.cred === null) {
-      p.destroy()
-      return
-    }
-
-    getEncrypted(store.cred.username)
-      .then((encrypted): void => {
-        if (encrypted === null) {
-          return
-        }
-        if (store.cred === null) {
-          p.destroy()
-          return
-        }
-        sendChunky(encrypted, p, store.cred.deviceName)
-        sendToElm(
-          'Toast',
-          `Sent data to ${deviceNames.get(socketId) ?? socketId}`,
-        )
-      })
-      .catch((e): void => {
-        console.error(e)
-      })
-  })
-
-  p.on('signal', (signalData): void => {
-    if (store.cred === null) {
-      p.destroy()
-      return
-    }
-
-    sendSocket({
-      msg: 'signal',
-      payload: {
-        signalData: JSON.stringify(signalData),
-        socketId,
-        username: store.cred.username,
-      },
+const CHUNK_SIZE = 1000
+export const sendTransactionsToPeer = (
+  socketId: string,
+  transactions: Transactions,
+): void => {
+  for (let i = 0; i < transactions.length; i += CHUNK_SIZE) {
+    peersBySocketId.get(socketId)?.write({
+      msg: 'transactions',
+      payload: transactions.slice(i, i + CHUNK_SIZE),
     })
-  })
-
-  p.on('error', (e): void => {
-    sendToElm('Toast', `Peer communication error ${String(e)}`)
-    p.destroy()
-    peers.delete(socketId)
-    deviceNames.delete(socketId)
-  })
-
-  let sendChunkyId: null | string = null
-  let data: Array<Uint8Array> = []
-  let currentDataLength = 0
-  let wholeDataLength = 0
-
-  const cleanUp = (): void => {
-    data = []
-    currentDataLength = 0
-    wholeDataLength = 0
   }
-
-  const cleanUpAndDestroy = (message: string): void => {
-    sendToElm('Toast', message)
-    p.destroy()
-    cleanUp()
-  }
-
-  p.on('data', (arrayBuffer: unknown): void => {
-    if (store.cred === null) {
-      cleanUpAndDestroy("Can't process data. You are signed out")
-      return
-    }
-
-    if (!(arrayBuffer instanceof Uint8Array)) {
-      cleanUpAndDestroy('Got wrong data from remote. Expected: Uint8Array')
-      return
-    }
-
-    const deserializedData = deserialize(arrayBuffer)
-    if (!isChunkValid(deserializedData)) {
-      cleanUpAndDestroy('Got wrong data from remote. Expected: Chunk')
-      return
-    }
-
-    const {
-      dataLength,
-      index,
-      subarray: { buffer: subarray },
-      deviceName,
-      id,
-    } = deserializedData
-
-    deviceNames.set(socketId, deviceName)
-
-    if (sendChunkyId !== id || wholeDataLength !== dataLength) {
-      cleanUp()
-      sendChunkyId = id
-      wholeDataLength = dataLength
-    }
-
-    data[index] = subarray
-    currentDataLength += subarray.length
-
-    if (currentDataLength === wholeDataLength) {
-      sendToElm('Toast', `Got data from ${deviceName}`)
-      const arrayBuffer = new Uint8Array(
-        data.flatMap((arr): Array<number> => [...arr]),
-      )
-      decrypt({ arrayBuffer, password: store.cred.password })
-        .then((transactions): void => {
-          sendToElm('ReceivedTransactions', transactions)
-          cleanUp()
-        })
-        .catch((): void => {
-          cleanUpAndDestroy(
-            'Got data encrypted with a different password. Make sure your devices use the same password',
-          )
-        })
-    }
-  })
-
-  p.on('close', (): void => {
-    p.destroy()
-    peers.delete(socketId)
-    deviceNames.delete(socketId)
+  sendMessageToPeer(socketId, {
+    msg: 'finishedSendingTransactions',
   })
 }
+
+export const sendMessageToPeer = (
+  socketId: string,
+  message: PeerMessage,
+): void => peersBySocketId.get(socketId)?.write(message)
 
 export const socket = io(
   'https://webrtc-mesh-signaling.herokuapp.com',
@@ -216,68 +319,60 @@ socket.on('connect', (): void => {
   sendSocket({ msg: 'init', payload: store.cred.username })
 })
 
+const onSocketIdsSchema: JSONSchemaType<{
+  socketIds: Array<string>
+}> = {
+  type: 'object',
+  properties: {
+    socketIds: {
+      type: 'array',
+      items: { type: 'string' },
+    },
+  },
+  required: ['socketIds'],
+}
+const validateOnSocketIds = ajv.compile(onSocketIdsSchema)
 socket.on('socketIds', (payload: unknown): void => {
-  if (!hasKey(payload, 'socketIds')) {
-    console.error('socketIds payload is missing required key socketIds')
+  if (!validateOnSocketIds(payload)) {
+    sendToElm('Toast', 'Server sent invalid data')
     return
   }
-  const { socketIds } = payload
-  if (
-    !Array.isArray(socketIds) ||
-    !socketIds.every((x): x is string => typeof x === 'string')
-  ) {
-    console.error('socketIds is not an array of strings: unrecoverable error')
-    return
-  }
-
-  for (const socketId of socketIds.filter(
+  for (const socketId of payload.socketIds.filter(
     (socketId): boolean => socketId !== socket.id,
   )) {
-    const p = new window.SimplePeer({
-      initiator: true,
-      trickle: false,
-    })
-
-    addListeners(p, socketId)
-
-    peers.set(socketId, p)
+    peersBySocketId.set(socketId, new Peer({ initiator: true, socketId }))
   }
 })
 
-socket.on('signal', (data: unknown): void => {
-  if (!hasKey(data, 'socketId') || !hasKey(data, 'signalData')) {
+const onSignalSchema: JSONSchemaType<{
+  socketId: string
+  signalData: string
+}> = {
+  type: 'object',
+  properties: {
+    socketId: { type: 'string' },
+    signalData: { type: 'string' },
+  },
+  required: ['socketId', 'signalData'],
+}
+const validateOnSignalSchema = ajv.compile(onSignalSchema)
+socket.on('signal', (payload: unknown): void => {
+  if (!validateOnSignalSchema(payload)) {
     console.error(
       'signal is not an object with socketId and signalData: unrecoverable error',
     )
     return
   }
-
-  const { socketId, signalData } = data
-
-  if (typeof socketId !== 'string' || typeof signalData !== 'string') {
-    console.error(
-      'signal is not an object with socketId and signalData: unrecoverable error',
-    )
-    return
+  const { socketId, signalData } = payload
+  let peer = peersBySocketId.get(socketId)
+  if (peer === undefined) {
+    peer = new Peer({ initiator: false, socketId })
+    peersBySocketId.set(socketId, peer)
   }
-
-  let p = peers.get(socketId)
-
-  if (p === undefined) {
-    p = new window.SimplePeer({
-      initiator: false,
-      trickle: false,
-    })
-
-    addListeners(p, socketId)
-
-    peers.set(socketId, p)
-  }
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-  p.signal(JSON.parse(signalData))
+  peer.signal(signalData)
 })
 
-type SendOptions =
+type SocketSendMessage =
   | {
       msg: 'init'
       payload: string
@@ -291,7 +386,7 @@ type SendOptions =
       }
     }
 
-export const sendSocket = ({ msg, payload }: SendOptions): void => {
+const sendSocket = ({ msg, payload }: SocketSendMessage): void => {
   socket.send({
     app: 'dbudget',
     data: { msg, ...(payload === undefined ? {} : { payload }) },
