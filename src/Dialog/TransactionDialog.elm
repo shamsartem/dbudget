@@ -22,6 +22,7 @@ import Json.Decode as Decode
 import Numeric.Decimal as Decimal
 import Numeric.Nat as Nat exposing (Nat)
 import Port
+import Process
 import Route
 import Store exposing (Store)
 import Task
@@ -139,6 +140,11 @@ getDialogDataField extractor dialog =
 dialogId : String
 dialogId =
     "transactionDialog"
+
+
+saveButtonId : String
+saveButtonId =
+    "saveButton"
 
 
 closeButtonId : String
@@ -612,6 +618,7 @@ viewTransactionForm dialogData dialog model leftButton =
                         , button
                             [ class "button Transaction_button"
                             , onClick SaveClicked
+                            , id saveButtonId
                             , disabled isButtonsDisabled
                             ]
                             [ text "Save" ]
@@ -708,7 +715,11 @@ viewTransactionForm dialogData dialog model leftButton =
                         , otherAttributes = [ c "input" ]
                         , textUnderInput = textsUnderInputs.category
                         , dirty = dirtyRecord.category
-                        , maybeDatalist = Just categories
+                        , maybeDatalist =
+                            Just
+                                { list = categories
+                                , onSelect = SelectedFieldValue Transaction.Category
+                                }
                         , hasClearButton = True
                         }
                     , Input.view
@@ -722,7 +733,11 @@ viewTransactionForm dialogData dialog model leftButton =
                         , otherAttributes = [ c "input" ]
                         , textUnderInput = textsUnderInputs.name
                         , dirty = dirtyRecord.name
-                        , maybeDatalist = Just names
+                        , maybeDatalist =
+                            Just
+                                { list = names
+                                , onSelect = SelectedFieldValue Transaction.Name
+                                }
                         , hasClearButton = True
                         }
                     , calcInputView (getId Transaction.Price)
@@ -794,7 +809,11 @@ viewTransactionForm dialogData dialog model leftButton =
                             ]
                         , textUnderInput = textsUnderInputs.currency
                         , dirty = dirtyRecord.currency
-                        , maybeDatalist = Just currencies
+                        , maybeDatalist =
+                            Just
+                                { list = currencies
+                                , onSelect = SelectedFieldValue Transaction.Currency
+                                }
                         , hasClearButton = True
                         }
                     , Input.view
@@ -808,7 +827,11 @@ viewTransactionForm dialogData dialog model leftButton =
                         , otherAttributes = [ c "input" ]
                         , textUnderInput = textsUnderInputs.account
                         , dirty = False
-                        , maybeDatalist = Just accounts
+                        , maybeDatalist =
+                            Just
+                                { list = accounts
+                                , onSelect = SelectedFieldValue Transaction.Account
+                                }
                         , hasClearButton = True
                         }
                     , case error Transaction.FullPrice of
@@ -879,6 +902,7 @@ type Msg
     = ClosedDialog
     | SetIsIncome Bool
     | SetField Transaction.Field String
+    | SelectedFieldValue Transaction.Field String
     | BluredFromField Transaction.Field
     | SaveClicked
     | ConfirmedSave Transaction.Data
@@ -1058,6 +1082,50 @@ update msg model =
                                 }
                             )
                         )
+
+                SelectedFieldValue field str ->
+                    let
+                        up id =
+                            ( model
+                            , Cmd.batch
+                                [ Task.attempt (\_ -> NoOp) (focus id)
+                                , Process.sleep 1
+                                    |> Task.perform (\_ -> SetField field str)
+                                ]
+                            )
+                    in
+                    case field of
+                        Transaction.Date ->
+                            ( model, Cmd.none )
+
+                        Transaction.Category ->
+                            up (getId Transaction.Name)
+
+                        Transaction.Name ->
+                            up (getId Transaction.Price)
+
+                        Transaction.Price ->
+                            ( model, Cmd.none )
+
+                        Transaction.Amount ->
+                            ( model, Cmd.none )
+
+                        Transaction.Description ->
+                            ( model, Cmd.none )
+
+                        Transaction.Currency ->
+                            up (getId Transaction.Account)
+
+                        Transaction.Account ->
+                            up saveButtonId
+
+                        -- is an output field so should not be handled
+                        Transaction.FullPrice ->
+                            ( model, Cmd.none )
+
+                        -- is handled in SetIncome
+                        Transaction.IsIncome ->
+                            ( model, Cmd.none )
 
                 SetField field str ->
                     let

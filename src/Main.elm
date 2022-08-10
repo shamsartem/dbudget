@@ -84,9 +84,7 @@ initialModel maybeSeed { seedAndExtension, deviceName, windowWidth } url key =
                     SignIn.init store
             in
             ( SignIn signInModel
-            , Cmd.batch
-                [ Cmd.map GotSignInMsg signInCommand
-                ]
+            , Cmd.map GotSignInMsg signInCommand
             )
 
 

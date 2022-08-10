@@ -46,7 +46,7 @@ type alias Config msg =
     , required : Bool
     , value : String
     , textUnderInput : TextUnderInput
-    , maybeDatalist : Maybe (List String)
+    , maybeDatalist : Maybe { list : List String, onSelect : String -> msg }
     , hasClearButton : Bool
     }
 
@@ -64,6 +64,15 @@ cl elementAndOrModifier =
 c : String -> Attribute msg
 c elementAndOrModifier =
     class (cl elementAndOrModifier)
+
+
+
+-- needed to distinguish between selecting a datalist option and typing in a new value
+
+
+invisibleChar : String
+invisibleChar =
+    "\u{2063}"
 
 
 view : Config msg -> Html msg
@@ -137,7 +146,19 @@ view config =
                       , config.hasClearButton
                       )
                     ]
-                , onInput config.onInput
+                , onInput
+                    (\str ->
+                        if String.contains invisibleChar str then
+                            String.replace invisibleChar "" str
+                                |> (config.maybeDatalist
+                                        |> Maybe.map (\{ onSelect } -> onSelect)
+                                        -- should always have onSelect when there is invisibleChar
+                                        |> Maybe.withDefault config.onInput
+                                   )
+
+                        else
+                            config.onInput str
+                    )
                 , value config.value
                 , id config.id
                 , required config.required
@@ -287,12 +308,12 @@ view config =
                 Nothing ->
                     text ""
 
-                Just list ->
+                Just { list } ->
                     datalist
                         [ id datalistId ]
                         (List.map
-                            (\item -> option [ value item ] [])
-                            (List.take 17 list)
+                            (\item -> option [ value (item ++ invisibleChar) ] [])
+                            (List.take 30 list)
                         )
     in
     div
