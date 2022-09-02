@@ -66,16 +66,6 @@ view config =
             else
                 []
 
-        viewlabel =
-            label
-                [ for config.id
-                , c "label"
-                ]
-            <|
-                List.append
-                    requiredstar
-                    [ text config.label ]
-
         checkboxattributes =
             List.append
                 [ c "input"
@@ -89,8 +79,10 @@ view config =
                 config.otherAttributes
     in
     div [ class baseClass ]
-        [ input
-            checkboxattributes
-            []
-        , viewlabel
+        [ input checkboxattributes []
+        , label [ for config.id, c "label" ]
+            (List.append
+                requiredstar
+                [ text config.label ]
+            )
         ]

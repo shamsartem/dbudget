@@ -8,6 +8,7 @@ import Json.Decode
 import Page.CSV as CSV
 import Page.NotFound as NotFound
 import Page.SignIn as SignIn
+import Page.Stats as Stats
 import Page.TransactionList as TransactionList
 import Port
 import Prng.Uuid
@@ -18,13 +19,13 @@ import Task
 import Time
 import Transaction
 import Url exposing (Url)
-import UuidSeed exposing (UuidSeed)
+import Uuid exposing (UuidSeed)
 import View.Confirm as Confirm
 import View.Toasts as Toasts
 
 
 type alias Flags =
-    { seedAndExtension : UuidSeed.SeedAndExtension
+    { seedAndExtension : Uuid.SeedAndExtension
     , deviceName : String
     , windowWidth : Int
     }
@@ -39,6 +40,7 @@ type Model
     | SignIn SignIn.Model
     | TransactionList TransactionList.Model
     | CSV CSV.Model
+    | Stats Stats.Model
 
 
 initialModel : Maybe UuidSeed -> Flags -> Url -> Nav.Key -> ( Model, Cmd Msg )
@@ -50,7 +52,7 @@ initialModel maybeSeed { seedAndExtension, deviceName, windowWidth } url key =
             , url = url
             , uuidSeed =
                 Maybe.withDefault
-                    (UuidSeed.init seedAndExtension)
+                    (Uuid.init seedAndExtension)
                     maybeSeed
             , signedInData = Nothing
             , deviceName = deviceName
@@ -101,13 +103,16 @@ getTitle model =
     in
     case model of
         TransactionList m ->
-            TransactionList.getTitle m
+            getFullTitle (TransactionList.getTitle m)
 
         SignIn _ ->
             getFullTitle "Sign in"
 
         CSV _ ->
             getFullTitle "CSV"
+
+        Stats _ ->
+            getFullTitle "Stats"
 
         NotFound _ ->
             getFullTitle "Not found"
@@ -174,6 +179,9 @@ view model =
         CSV csvModel ->
             viewPage GotCSVMsg (CSV.view csvModel)
 
+        Stats statsModel ->
+            viewPage GotStatsMsg (Stats.view statsModel)
+
 
 type Msg
     = ClickedLink Browser.UrlRequest
@@ -181,6 +189,7 @@ type Msg
     | GotSignInMsg SignIn.Msg
     | GotTransactionListMsg TransactionList.Msg
     | GotCSVMsg CSV.Msg
+    | GotStatsMsg Stats.Msg
     | GotNewWindowWidth Int
     | RecievedMessage Port.Message
     | OkOfflineReadyClicked
@@ -204,6 +213,9 @@ getStore model =
         CSV csvModel ->
             CSV.getStore csvModel
 
+        Stats statsModel ->
+            Stats.getStore statsModel
+
 
 setStore : Store -> Model -> Model
 setStore store model =
@@ -219,6 +231,9 @@ setStore store model =
 
         CSV csvModel ->
             CSV (CSV.setStore store csvModel)
+
+        Stats statsModel ->
+            Stats (Stats.setStore store statsModel)
 
 
 changeRouteTo : Maybe Route -> Store -> ( Model, Cmd Msg )
@@ -253,6 +268,10 @@ changeRouteTo maybeRoute store =
                         store
                         signedInData
                         |> updatePageWith TransactionList GotTransactionListMsg
+
+                Just Route.Stats ->
+                    Stats.init store signedInData
+                        |> updatePageWith Stats GotStatsMsg
 
                 Just Route.CSV ->
                     CSV.init store signedInData
@@ -326,6 +345,10 @@ update message model =
             CSV.update subMsg csvModel
                 |> updatePageWith CSV GotCSVMsg
 
+        ( GotStatsMsg subMsg, Stats statsModel ) ->
+            Stats.update subMsg statsModel
+                |> updatePageWith Stats GotStatsMsg
+
         ( RecievedMessage { tag, payload }, _ ) ->
             case tag of
                 "NeedRefresh" ->
@@ -390,7 +413,6 @@ update message model =
                             )
 
                         _ ->
-                            -- TODO: solve error
                             ( model, Cmd.none )
 
                 "Toast" ->
@@ -427,7 +449,6 @@ update message model =
                             )
 
                         _ ->
-                            -- js should always send string toast
                             ( model, Cmd.none )
 
                 _ ->
@@ -482,6 +503,9 @@ subscriptions model =
 
                 CSV m ->
                     Sub.map GotCSVMsg (CSV.subscriptions m)
+
+                Stats m ->
+                    Sub.map GotStatsMsg (Stats.subscriptions m)
     in
     Sub.batch
         [ pageSubscriptions

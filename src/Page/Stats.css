@@ -1,0 +1,38 @@
+.Stats {
+  display: flex;
+  flex-grow: 1;
+  align-items: center;
+  overflow-y: scroll;
+
+  &_container {
+    display: flex;
+    overflow: auto;
+    width: 100%;
+    max-width: var(--max-page-width);
+    flex-direction: column;
+    flex-grow: 1;
+    padding: 20px;
+  }
+
+  &_checkboxContainer {
+    margin-bottom: 20px;
+  }
+
+  &_inputContainer {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 20px;
+    gap: 20px;
+
+    & > * {
+      flex-grow: 1;
+    }
+  }
+
+  &_chartContainer {
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1;
+    gap: 10px;
+  }
+}

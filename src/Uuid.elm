@@ -1,8 +1,8 @@
-module UuidSeed exposing (SeedAndExtension, UuidSeed, getNewUuid, init, urlParser)
+module Uuid exposing (SeedAndExtension, UuidSeed, getNewUuid, init)
 
-import Prng.Uuid as Uuid exposing (Uuid)
+import Prng.Uuid exposing (Uuid)
 import Random.Pcg.Extended exposing (Seed, initialSeed, step)
-import Url.Parser exposing (Parser)
+
 
 type UuidSeed
     = UuidSeed Seed
@@ -25,13 +25,8 @@ getNewUuid : UuidSeed -> ( Uuid, UuidSeed )
 getNewUuid (UuidSeed seed) =
     let
         ( newuuid, newseed ) =
-            step Uuid.generator seed
+            step Prng.Uuid.generator seed
     in
     ( newuuid
     , UuidSeed newseed
     )
-
-
-urlParser : Parser (Uuid -> a) a
-urlParser =
-    Url.Parser.custom "TRANSACTION_ID" (\str -> Uuid.fromString str)

@@ -27,8 +27,7 @@ c elementAndOrModifier =
 view : Html msg
 view =
     main_ [ class baseClass ]
-        [ h1 [ c "title" ]
-            [ text "Page not found" ]
+        [ h1 [ c "title" ] [ text "Page not found" ]
         , a
             [ Route.href Route.TransactionList
             , class "button"

@@ -12,6 +12,7 @@ module Transaction exposing
     , getDecimalsDict
     , getDefaultTransactionValue
     , getFullPrice
+    , getPrice
     , getNewTransactionTemplate
     , getNotDeletedTransactionDataList
     , getTransaction
@@ -39,7 +40,7 @@ import Prng.Uuid exposing (Uuid)
 import Regex
 import Route exposing (Route(..))
 import Time exposing (Posix)
-import UuidSeed exposing (UuidSeed)
+import Uuid exposing (UuidSeed)
 import Validate
     exposing
         ( Validator
@@ -281,10 +282,10 @@ ifInvalidSum subjectToString ( field, fieldName ) =
                             ArithmeticParseError e ->
                                 case e of
                                     ArithmeticError.Overflow ->
-                                        "Number is too large or has too much decimal points in the " ++ fieldName ++ " field"
+                                        "Number is too large or has too many decimal points in the " ++ fieldName ++ " field"
 
                                     ArithmeticError.Underflow ->
-                                        "Number is too large or has too much decimal points in the " ++ fieldName ++ " field"
+                                        "Number is too large or has too many decimal points in the " ++ fieldName ++ " field"
 
                                     ArithmeticError.DivisionByZero ->
                                         "Number has division by zero in the " ++ fieldName ++ " field"
@@ -652,7 +653,7 @@ listOfRowsToTransactions uuidSeed timeNow listOfRows =
                 ( id, seed ) =
                     case maybeId of
                         Nothing ->
-                            UuidSeed.getNewUuid newUuidSeed
+                            Uuid.getNewUuid newUuidSeed
 
                         Just uuid ->
                             ( uuid, newUuidSeed )

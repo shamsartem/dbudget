@@ -2,7 +2,6 @@ module Store exposing
     ( SignedInData
     , Store
     , getNewUuid
-    , setStore
     , windowWidthExtraLarge
     , windowWidthLarge
     , windowWidthSmall
@@ -12,7 +11,7 @@ import Browser.Navigation as Nav
 import Prng.Uuid exposing (Uuid)
 import Transaction
 import Url exposing (Url)
-import UuidSeed exposing (UuidSeed)
+import Uuid exposing (UuidSeed)
 
 
 type alias SignedInData =
@@ -58,11 +57,6 @@ getNewUuid : Store -> ( Store, Uuid )
 getNewUuid store =
     let
         ( newUuid, newUuidSeed ) =
-            UuidSeed.getNewUuid store.uuidSeed
+            Uuid.getNewUuid store.uuidSeed
     in
     ( { store | uuidSeed = newUuidSeed }, newUuid )
-
-
-setStore : Store -> { a | store : Store } -> { a | store : Store }
-setStore store a =
-    { a | store = store }

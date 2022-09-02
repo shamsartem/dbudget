@@ -55,7 +55,7 @@ getStore { store } =
 
 setStore : Store -> Model -> Model
 setStore store model =
-    Store.setStore store model
+    { model | store = store }
 
 
 baseClass : String
@@ -172,7 +172,7 @@ view model =
                 text ""
 
             SignedInAndLoading ->
-                div [ c "state" ] [ Loader.view Nothing ]
+                div [ c "state" ] [ Loader.view "Loading..." ]
 
             WrongPassword ->
                 div [ c "state", c "state__wrongPassword" ] [ text "Wrong password" ]
@@ -235,7 +235,7 @@ view model =
                 }
             , button [ class "button", disabled isDisabled ] [ text "Sign in" ]
             ]
-        , div [ c "version" ] [ text "Version 0.0.7" ]
+        , div [ c "version" ] [ text "Version 0.0.8" ]
         ]
 
 

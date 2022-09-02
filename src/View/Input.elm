@@ -26,7 +26,6 @@ import Html.Events
         , onClick
         , onInput
         )
-import Utils
 
 
 type TextUnderInput
@@ -64,6 +63,11 @@ cl elementAndOrModifier =
 c : String -> Attribute msg
 c elementAndOrModifier =
     class (cl elementAndOrModifier)
+
+
+classNamesToAttributes : List String -> List (Attribute msg)
+classNamesToAttributes classNames =
+    classNames |> List.map (\className -> c className)
 
 
 
@@ -233,21 +237,18 @@ view config =
                 , clearButtonView
                 ]
 
-        getEmptyTextUnderInput className =
+        getEmptyTextUnderInput classNames =
             div [ c "textUnderInputContainer" ]
-                [ div
-                    [ class className
-                    ]
-                    []
-                ]
+                [ div (classNamesToAttributes classNames) [] ]
 
-        getTextUnderInput t className =
+        getTextUnderInput t classNames =
             div [ c "textUnderInputContainer" ]
                 [ div
-                    [ class className
-                    , id errorOrWarningId
-                    , tabindex 0
-                    ]
+                    (List.append (classNamesToAttributes classNames)
+                        [ id errorOrWarningId
+                        , tabindex 0
+                        ]
+                    )
                     [ text t ]
                 ]
 
@@ -260,48 +261,38 @@ view config =
                     case maybeError of
                         Nothing ->
                             getEmptyTextUnderInput
-                                (Utils.classes
-                                    [ cl "textUnderInput"
-                                    , cl "textUnderInput__error"
-                                    ]
-                                )
+                                [ "textUnderInput"
+                                , "textUnderInput__error"
+                                ]
 
                         Just error ->
                             if config.dirty then
                                 getTextUnderInput error
-                                    (Utils.classes
-                                        [ cl "textUnderInput"
-                                        , cl "textUnderInput__error"
-                                        , cl "textUnderInput__visible"
-                                        ]
-                                    )
+                                    [ "textUnderInput"
+                                    , "textUnderInput__error"
+                                    , "textUnderInput__visible"
+                                    ]
 
                             else
                                 getEmptyTextUnderInput
-                                    (Utils.classes
-                                        [ cl "textUnderInput"
-                                        , cl "textUnderInput__error"
-                                        ]
-                                    )
+                                    [ "textUnderInput"
+                                    , "textUnderInput__error"
+                                    ]
 
                 Warning maybeWarning ->
                     case maybeWarning of
                         Nothing ->
                             getEmptyTextUnderInput
-                                (Utils.classes
-                                    [ cl "textUnderInput"
-                                    , cl "textUnderInput__warning"
-                                    ]
-                                )
+                                [ "textUnderInput"
+                                , "textUnderInput__warning"
+                                ]
 
                         Just error ->
                             getTextUnderInput error
-                                (Utils.classes
-                                    [ cl "textUnderInput"
-                                    , cl "textUnderInput__warning"
-                                    , cl "textUnderInput__visible"
-                                    ]
-                                )
+                                [ "textUnderInput"
+                                , "textUnderInput__warning"
+                                , "textUnderInput__visible"
+                                ]
 
         dataListView =
             case config.maybeDatalist of

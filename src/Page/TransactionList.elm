@@ -80,10 +80,10 @@ setStore store model =
         | dialogModel =
             case model.dialogModel of
                 WithoutDialog m ->
-                    WithoutDialog (Store.setStore store m)
+                    WithoutDialog { m | store = store }
 
                 DialogModel m ->
-                    DialogModel (Store.setStore store m)
+                    DialogModel { m | store = store }
     }
 
 

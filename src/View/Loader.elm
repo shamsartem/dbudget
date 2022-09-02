@@ -19,8 +19,8 @@ c elementAndOrModifier =
     class (cl elementAndOrModifier)
 
 
-view : Maybe String -> Html.Html msg
-view maybeText =
+view : String -> Html.Html msg
+view loadingText =
     div [ class baseClass ]
         [ div [ c "container" ]
             [ div [ c "dot", c "dot__1" ] []
@@ -28,5 +28,5 @@ view maybeText =
             , div [ c "dot", c "dot__3" ] []
             , div [ c "dot", c "dot__4" ] []
             ]
-        , div [ class "visuallyHidden" ] [ text (Maybe.withDefault "Loading..." maybeText) ]
+        , div [ class "visuallyHidden" ] [ text loadingText ]
         ]

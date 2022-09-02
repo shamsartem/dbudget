@@ -6,7 +6,6 @@ import Html.Attributes as Attr
 import Prng.Uuid exposing (Uuid)
 import Url exposing (Url)
 import Url.Parser as Parser exposing ((</>), Parser, oneOf, s)
-import UuidSeed
 
 
 
@@ -19,6 +18,12 @@ type Route
     | Transaction Uuid
     | CSV
     | SignOut
+    | Stats
+
+
+uuidUrlParser : Parser (Uuid -> a) a
+uuidUrlParser =
+    Parser.custom "TRANSACTION_ID" (\str -> Prng.Uuid.fromString str)
 
 
 routeParser : Parser (Route -> a) a
@@ -26,8 +31,9 @@ routeParser =
     oneOf
         [ Parser.map TransactionList Parser.top
         , Parser.map TransactionNew (s "transaction" </> s "new")
-        , Parser.map Transaction (s "transaction" </> UuidSeed.urlParser)
+        , Parser.map Transaction (s "transaction" </> uuidUrlParser)
         , Parser.map CSV (s "csv")
+        , Parser.map Stats (s "stats")
         , Parser.map SignOut (s "sign-out")
         ]
 
@@ -80,6 +86,9 @@ routeToPath page =
             [ "transaction"
             , Prng.Uuid.toString id
             ]
+
+        Stats ->
+            [ "stats" ]
 
         CSV ->
             [ "csv" ]
