@@ -17,7 +17,7 @@ import {
   validateTransactionsWithNew,
 } from './transactions'
 import { getEncrypted, dbOpenRequest, TRANSACTIONS } from './idb'
-import { LOCAL_STORAGE_DEVICE_NAME } from './const'
+import { LOCAL_STORAGE_DEVICE_NAME, LOCAL_STORAGE_SERVER } from './const'
 import { decrypt, encrypt } from './crypto'
 import { hasKeys } from './typeHelpers'
 
@@ -98,6 +98,7 @@ app.ports.sendMessage.subscribe(
           store.cred = payload
           const { password, username, deviceName, server } = payload
           localStorage.setItem(LOCAL_STORAGE_DEVICE_NAME, deviceName)
+          localStorage.setItem(LOCAL_STORAGE_SERVER, server)
           getEncrypted(username)
             .then(async (encrypted): Promise<void> => {
               try {
