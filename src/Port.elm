@@ -23,7 +23,12 @@ type SendMessage
     = UpdatedTransactions Transactions Transactions
     | GotHelloBack { transactions : Transactions, socketId : String }
     | MergedReceivedTransactions Transactions
-    | SignedIn { username : String, password : String, deviceName : String }
+    | SignedIn
+        { username : String
+        , password : String
+        , deviceName : String
+        , server : String
+        }
     | SignedOut
     | RefreshApp
 
@@ -55,13 +60,14 @@ send msg =
                 Transaction.toJsonValue transactions
             }
 
-        SignedIn { username, password, deviceName } ->
+        SignedIn { username, password, deviceName, server } ->
             { tag = "SignedIn"
             , payload =
                 Json.Encode.object
                     [ ( "password", Json.Encode.string password )
                     , ( "username", Json.Encode.string username )
                     , ( "deviceName", Json.Encode.string deviceName )
+                    , ( "server", Json.Encode.string server )
                     ]
             }
 

@@ -96,7 +96,7 @@ app.ports.sendMessage.subscribe(
       case 'SignedIn': {
         if (validateCred(payload)) {
           store.cred = payload
-          const { password, username, deviceName } = payload
+          const { password, username, deviceName, server } = payload
           localStorage.setItem(LOCAL_STORAGE_DEVICE_NAME, deviceName)
           getEncrypted(username)
             .then(async (encrypted): Promise<void> => {
@@ -111,7 +111,7 @@ app.ports.sendMessage.subscribe(
                   throw new Error('Decrypted data has wrong format')
                 }
                 sendToElm('SignInSuccess', decrypted)
-                socket.connect()
+                socket.connect(server)
               } catch (e) {
                 sendToElm('WrongPassword')
                 return

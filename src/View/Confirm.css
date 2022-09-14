@@ -55,6 +55,13 @@
     font-weight: var(--fw-bold);
   }
 
+  &_body {
+    padding: var(--space-lg);
+    line-height: 1.5;
+    text-align: left;
+    white-space: pre-wrap;
+  }
+
   &_button {
     width: 100%;
   }

@@ -27,6 +27,7 @@ declare module '*.elm' {
         flags: {
           seedAndExtension: (number | number[])[]
           deviceName: string
+          server: string
           windowWidth: number
           navigatorLanguage: string
         }

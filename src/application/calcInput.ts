@@ -11,28 +11,17 @@ const inputEvent = new Event('input', {
 window.addEventListener(
   'input',
   ({ target }): void => {
-    if (!(target instanceof HTMLInputElement)) {
+    if (
+      !(target instanceof HTMLInputElement) ||
+      !hasKey(target.dataset, 'calcInput') ||
+      typeof target.value !== 'string' ||
+      typeof target.selectionStart !== 'number'
+    ) {
       return
     }
 
-    if (!hasKey(target.dataset, 'calcInput')) {
-      return
-    }
-
-    const { value } = target
-
-    if (typeof value !== 'string') {
-      return
-    }
-
-    const { selectionStart } = target
-
-    if (typeof selectionStart !== 'number') {
-      return
-    }
-
-    const before = calcOnly(value.slice(0, selectionStart))
-    const after = calcOnly(value.slice(selectionStart))
+    const before = calcOnly(target.value.slice(0, target.selectionStart))
+    const after = calcOnly(target.value.slice(target.selectionStart))
     target.value = before + after
     target.selectionStart = before.length
     target.selectionEnd = before.length
@@ -43,21 +32,15 @@ window.addEventListener(
 window.addEventListener(
   'blur',
   ({ target }): void => {
-    if (!(target instanceof HTMLInputElement)) {
+    if (
+      !(target instanceof HTMLInputElement) ||
+      !hasKeys(target.dataset, 'calcInput', 'pos') ||
+      typeof target.selectionStart !== 'number'
+    ) {
       return
     }
 
-    if (!hasKeys(target.dataset, 'calcInput', 'pos')) {
-      return
-    }
-
-    const { selectionStart } = target
-
-    if (typeof selectionStart !== 'number') {
-      return
-    }
-
-    target.dataset.pos = `${selectionStart}`
+    target.dataset.pos = `${target.selectionStart}`
   },
   { capture: true },
 )
@@ -79,15 +62,11 @@ const insertSymbol = (
 window.addEventListener(
   'click',
   ({ target }): void => {
-    if (!hasKeys(target, 'dataset')) {
-      return
-    }
-
-    if (!hasKeys(target.dataset, 'forCalcInput')) {
-      return
-    }
-
-    if (typeof target.dataset.forCalcInput !== 'string') {
+    if (
+      !hasKeys(target, 'dataset') ||
+      !hasKeys(target.dataset, 'forCalcInput') ||
+      typeof target.dataset.forCalcInput !== 'string'
+    ) {
       return
     }
 

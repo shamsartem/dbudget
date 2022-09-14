@@ -13,6 +13,7 @@ type alias Button msg =
 
 type alias Config msg =
     { title : String
+    , maybeBody : Maybe String
     , okButton : Maybe (Button msg)
     , cancelButton : Button msg
     }
@@ -44,6 +45,12 @@ view config =
             ]
         , div [ c "container" ]
             [ h2 [ c "title" ] [ text config.title ]
+            , case config.maybeBody of
+                Just body ->
+                    div [ c "body" ] [ text body ]
+
+                Nothing ->
+                    text ""
             , div [ c "buttons" ]
                 [ button
                     [ class "button"

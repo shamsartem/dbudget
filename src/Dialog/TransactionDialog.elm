@@ -873,6 +873,7 @@ viewTransactionForm dialogData dialog model leftButton =
                     ConfirmUpdateCurrency td warning ->
                         Confirm.view
                             { title = warning
+                            , maybeBody = Nothing
                             , cancelButton = closeConfirmWindowButton
                             , okButton =
                                 Just
@@ -884,6 +885,7 @@ viewTransactionForm dialogData dialog model leftButton =
                     ConfirmDelete td ->
                         Confirm.view
                             { title = "Are you sure you want to delete?"
+                            , maybeBody = Nothing
                             , cancelButton = closeConfirmWindowButton
                             , okButton =
                                 Just

@@ -16,6 +16,7 @@ import Html.Events exposing (onClick, onSubmit)
 import Json.Decode
 import Port
 import Prng.Uuid
+import Regex
 import Store exposing (Store, getNewUuid)
 import Time
 import Transaction
@@ -29,6 +30,7 @@ type alias DirtyRecord =
     { deviceName : Bool
     , password : Bool
     , username : Bool
+    , server : Bool
     }
 
 
@@ -41,6 +43,7 @@ type SignInState
 type alias Model =
     { store : Store
     , deviceName : String
+    , server : String
     , password : String
     , username : String
     , dirtyRecord : DirtyRecord
@@ -77,6 +80,7 @@ type Field
     = DeviceName
     | Password
     | Username
+    | Server
 
 
 ifNotUuid : (subject -> String) -> error -> Validator error subject
@@ -93,6 +97,32 @@ ifNotUuid subjectToString error =
     Validate.fromErrors getErrors
 
 
+validUrlPattern : Regex.Regex
+validUrlPattern =
+    --"^(?:(?:https?|ftp)://)(?:\\S+(?::\\S*)?@)?(?:(?!10(?:\\.\\d{1,3}){3})(?!127(?:\\.\\d{1,3}){3})(?!169\\.254(?:\\.\\d{1,3}){2})(?!192\\.168(?:\\.\\d{1,3}){2})(?!172\\.(?:1[6-9]|2\\d|3[0-1])(?:\\.\\d{1,3}){2})(?:[1-9]\\d?|1\\d\\d|2[01]\\d|22[0-3])(?:\\.(?:1?\\d{1,2}|2[0-4]\\d|25[0-5])){2}(?:\\.(?:[1-9]\\d?|1\\d\\d|2[0-4]\\d|25[0-4]))|(?:(?:[a-z\\u00a1-\\uffff0-9]+-?)*[a-z\\u00a1-\\uffff0-9]+)(?:\\.(?:[a-z\\u00a1-\\uffff0-9]+-?)*[a-z\\u00a1-\\uffff0-9]+)*(?:\\.(?:[a-z\\u00a1-\\uffff]{2,})))(?::\\d{2,5})?(?:/[^\\s]*)?$"
+    "^(?:(?:https?|ftp)://)(?:\\S+(?::\\S*)?@)?(?:(?!(?:10|127)(?:\\.\\d{1,3}){3})(?!(?:169\\.254|192\\.168)(?:\\.\\d{1,3}){2})(?!172\\.(?:1[6-9]|2\\d|3[0-1])(?:\\.\\d{1,3}){2})(?:[1-9]\\d?|1\\d\\d|2[01]\\d|22[0-3])(?:\\.(?:1?\\d{1,2}|2[0-4]\\d|25[0-5])){2}(?:\\.(?:[1-9]\\d?|1\\d\\d|2[0-4]\\d|25[0-4]))|(?:(?:[a-z\\u00a1-\\uffff0-9]-*)*[a-z\\u00a1-\\uffff0-9]+)(?:\\.(?:[a-z\\u00a1-\\uffff0-9]-*)*[a-z\\u00a1-\\uffff0-9]+)*(?:\\.(?:[a-z\\u00a1-\\uffff]{2,})))(?::\\d{2,5})?(?:\\/\\S*)?$"
+        |> Regex.fromString
+        |> Maybe.withDefault Regex.never
+
+
+isValidUrl : String -> Bool
+isValidUrl url =
+    Regex.contains validUrlPattern url
+
+
+ifInvalidUrl : (subject -> String) -> error -> Validator error subject
+ifInvalidUrl subjectToUrl error =
+    let
+        getErrors subject =
+            if subject |> subjectToUrl |> isValidUrl then
+                []
+
+            else
+                [ error ]
+    in
+    Validate.fromErrors getErrors
+
+
 modelValidator : Validator ( Field, String ) Model
 modelValidator =
     Validate.all
@@ -101,6 +131,10 @@ modelValidator =
         , Validate.firstError
             [ ifBlank .username ( Username, "Username is missing" )
             , ifNotUuid .username ( Username, "Username is not a valid UUID" )
+            ]
+        , Validate.firstError
+            [ ifBlank .server ( Server, "Server is missing" )
+            , ifInvalidUrl .server ( Server, "Server is not a valid URL" )
             ]
         ]
 
@@ -116,10 +150,12 @@ init store =
       , username = ""
       , password = ""
       , deviceName = store.deviceName
+      , server = store.server
       , dirtyRecord =
             { deviceName = False
             , password = False
             , username = False
+            , server = False
             }
       , signInState = SignInNotAttempted
       }
@@ -233,9 +269,23 @@ view model =
                 , maybeDatalist = Nothing
                 , hasClearButton = False
                 }
+            , Input.view
+                { label = "Signaling server address"
+                , onInput = ServerInput
+                , onBlur = getBlurHandler Server
+                , value = model.server
+                , required = True
+                , hasPlaceholder = False
+                , id = "server"
+                , otherAttributes = [ disabled isDisabled ]
+                , textUnderInput = Input.Error (getError Server)
+                , dirty = model.dirtyRecord.server
+                , maybeDatalist = Nothing
+                , hasClearButton = False
+                }
             , button [ class "button", disabled isDisabled ] [ text "Sign in" ]
             ]
-        , div [ c "version" ] [ text "Version 0.0.8" ]
+        , div [ c "version" ] [ text "Version 0.0.9" ]
         ]
 
 
@@ -243,6 +293,7 @@ type Msg
     = LoginInput String
     | PasswordInput String
     | DeviceNameInput String
+    | ServerInput String
     | BluredFromField Field
     | SignIn
     | RecievedMessage Port.Message
@@ -275,11 +326,20 @@ update msg model =
             , Cmd.none
             )
 
+        ServerInput str ->
+            ( { model | server = str }
+            , Cmd.none
+            )
+
         SignIn ->
             if model.username /= "" && model.deviceName /= "" && model.password /= "" then
                 ( { model
                     | signInState = SignedInAndLoading
-                    , store = { store | deviceName = model.deviceName }
+                    , store =
+                        { store
+                            | deviceName = model.deviceName
+                            , server = model.server
+                        }
                   }
                 , Port.send
                     (Port.SignedIn
@@ -287,6 +347,7 @@ update msg model =
                             model.username
                         , deviceName = model.deviceName
                         , password = model.password
+                        , server = model.server
                         }
                     )
                 )
@@ -297,6 +358,7 @@ update msg model =
                         { deviceName = True
                         , password = True
                         , username = True
+                        , server = True
                         }
                   }
                 , Cmd.none
@@ -356,6 +418,9 @@ update msg model =
 
                 Password ->
                     updateDirtyRecord (\val -> { val | password = True }) model
+
+                Server ->
+                    updateDirtyRecord (\val -> { val | server = True }) model
 
         NewUsernameRequested ->
             let

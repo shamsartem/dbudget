@@ -27,6 +27,7 @@ import View.Toasts as Toasts
 type alias Flags =
     { seedAndExtension : Uuid.SeedAndExtension
     , deviceName : String
+    , server : String
     , windowWidth : Int
     }
 
@@ -44,7 +45,7 @@ type Model
 
 
 initialModel : Maybe UuidSeed -> Flags -> Url -> Nav.Key -> ( Model, Cmd Msg )
-initialModel maybeSeed { seedAndExtension, deviceName, windowWidth } url key =
+initialModel maybeSeed { seedAndExtension, deviceName, server, windowWidth } url key =
     let
         store : Store
         store =
@@ -56,6 +57,7 @@ initialModel maybeSeed { seedAndExtension, deviceName, windowWidth } url key =
                     maybeSeed
             , signedInData = Nothing
             , deviceName = deviceName
+            , server = server
             , windowWidth = windowWidth
             , isRefreshWindowVisible = False
             , isOfflineReadyWindowVisible = False
@@ -131,6 +133,7 @@ view model =
                 , if isOfflineReadyWindowVisible then
                     Confirm.view
                         { title = "App is ready to work offline"
+                        , maybeBody = Nothing
                         , cancelButton =
                             { title = "Ok"
                             , handleClick = OkOfflineReadyClicked
@@ -143,6 +146,7 @@ view model =
                 , if isRefreshWindowVisible then
                     Confirm.view
                         { title = "There is new app version. Update?"
+                        , maybeBody = Nothing
                         , cancelButton =
                             { title = "No"
                             , handleClick = CancelRefreshClicked
@@ -287,6 +291,7 @@ changeRouteTo maybeRoute store =
                                   -- but it is needed to typecheck
                                   seedAndExtension = ( 0, [ 0 ] )
                                 , deviceName = store.deviceName
+                                , server = store.server
                                 , windowWidth = store.windowWidth
                                 }
                                 store.url

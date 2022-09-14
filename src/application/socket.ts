@@ -1,6 +1,6 @@
 import { Buffer } from 'buffer'
 
-import { io } from 'socket.io-client'
+import { io, Socket } from 'socket.io-client'
 import type { JSONSchemaType } from 'ajv'
 
 import { sendToElm } from './elm'
@@ -117,7 +117,7 @@ class Peer {
         return
       }
 
-      sendSocket({
+      socket.send({
         msg: 'signal',
         payload: {
           signalData: JSON.stringify(signalData),
@@ -303,22 +303,6 @@ export const sendMessageToPeer = (
   message: PeerMessage,
 ): void => peersBySocketId.get(socketId)?.write(message)
 
-export const socket = io(
-  'https://webrtc-mesh-signaling.herokuapp.com',
-  // 'http://localhost:4000',
-  {
-    autoConnect: false,
-  },
-)
-
-socket.on('connect', (): void => {
-  if (store.cred === null || socket.disconnected) {
-    return
-  }
-  sendToElm('Toast', 'Connected to signaling server')
-  sendSocket({ msg: 'init', payload: store.cred.username })
-})
-
 const onSocketIdsSchema: JSONSchemaType<{
   socketIds: Array<string>
 }> = {
@@ -332,17 +316,6 @@ const onSocketIdsSchema: JSONSchemaType<{
   required: ['socketIds'],
 }
 const validateOnSocketIds = ajv.compile(onSocketIdsSchema)
-socket.on('socketIds', (payload: unknown): void => {
-  if (!validateOnSocketIds(payload)) {
-    sendToElm('Toast', 'Server sent invalid data')
-    return
-  }
-  for (const socketId of payload.socketIds.filter(
-    (socketId): boolean => socketId !== socket.id,
-  )) {
-    peersBySocketId.set(socketId, new Peer({ initiator: true, socketId }))
-  }
-})
 
 const onSignalSchema: JSONSchemaType<{
   socketId: string
@@ -356,21 +329,6 @@ const onSignalSchema: JSONSchemaType<{
   required: ['socketId', 'signalData'],
 }
 const validateOnSignalSchema = ajv.compile(onSignalSchema)
-socket.on('signal', (payload: unknown): void => {
-  if (!validateOnSignalSchema(payload)) {
-    console.error(
-      'signal is not an object with socketId and signalData: unrecoverable error',
-    )
-    return
-  }
-  const { socketId, signalData } = payload
-  let peer = peersBySocketId.get(socketId)
-  if (peer === undefined) {
-    peer = new Peer({ initiator: false, socketId })
-    peersBySocketId.set(socketId, peer)
-  }
-  peer.signal(signalData)
-})
 
 type SocketSendMessage =
   | {
@@ -385,10 +343,67 @@ type SocketSendMessage =
         username: string
       }
     }
+class SocketWrapper {
+  #socket?: Socket | undefined
+  connect(server: string): void {
+    this.#socket = io(server)
 
-const sendSocket = ({ msg, payload }: SocketSendMessage): void => {
-  socket.send({
-    app: 'dbudget',
-    data: { msg, ...(payload === undefined ? {} : { payload }) },
-  })
+    this.#socket.on('connect', (): void => {
+      if (
+        store.cred === null ||
+        this.#socket === undefined ||
+        this.#socket.disconnected
+      ) {
+        return
+      }
+      sendToElm('Toast', 'Connected to signaling server')
+      this.send({ msg: 'init', payload: store.cred.username })
+    })
+
+    this.#socket.on('socketIds', (payload: unknown): void => {
+      if (!validateOnSocketIds(payload)) {
+        sendToElm('Toast', 'Server sent invalid data')
+        return
+      }
+
+      const filteredSocketIds = payload.socketIds.filter(
+        (socketId): boolean =>
+          this.#socket !== undefined && socketId !== this.#socket.id,
+      )
+      for (const socketId of filteredSocketIds) {
+        peersBySocketId.set(socketId, new Peer({ initiator: true, socketId }))
+      }
+    })
+
+    this.#socket.on('signal', (payload: unknown): void => {
+      if (!validateOnSignalSchema(payload)) {
+        console.error(
+          'signal is not an object with socketId and signalData: unrecoverable error',
+        )
+        return
+      }
+      const { socketId, signalData } = payload
+      let peer = peersBySocketId.get(socketId)
+      if (peer === undefined) {
+        peer = new Peer({ initiator: false, socketId })
+        peersBySocketId.set(socketId, peer)
+      }
+      peer.signal(signalData)
+    })
+  }
+  send({ msg, payload }: SocketSendMessage): void {
+    if (this.#socket === undefined) {
+      throw new Error('`send` method called before `connect`')
+    }
+    this.#socket.send({
+      app: 'dbudget',
+      data: { msg, ...(payload === undefined ? {} : { payload }) },
+    })
+  }
+  disconnect(): void {
+    this.#socket?.disconnect()
+    this.#socket = undefined
+  }
 }
+
+export const socket = new SocketWrapper()

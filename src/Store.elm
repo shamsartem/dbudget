@@ -26,6 +26,7 @@ type alias Store =
     , uuidSeed : UuidSeed
     , signedInData : Maybe SignedInData
     , deviceName : String
+    , server : String
     , windowWidth : Int
     , isRefreshWindowVisible : Bool
     , isOfflineReadyWindowVisible : Bool

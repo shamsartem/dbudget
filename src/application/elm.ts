@@ -1,6 +1,6 @@
 import { Elm } from '../Main.elm'
 
-import { LOCAL_STORAGE_DEVICE_NAME } from './const'
+import { LOCAL_STORAGE_DEVICE_NAME, LOCAL_STORAGE_SERVER } from './const'
 import type { Transactions } from './transactions'
 
 const appEl = document.getElementById('app')
@@ -10,11 +10,18 @@ const randomIntegers = Array.from(
   window.crypto.getRandomValues(new Uint32Array(5)),
 )
 
+let server = localStorage.getItem(LOCAL_STORAGE_SERVER)
+if (server === null) {
+  server = 'https://webrtc-mesh-signaling.herokuapp.com'
+  localStorage.setItem(LOCAL_STORAGE_SERVER, server)
+}
+
 export const app = Elm.Main.init({
   node: appEl,
   flags: {
     seedAndExtension: [...randomIntegers.slice(0, 1), randomIntegers.slice(1)],
     deviceName: localStorage.getItem(LOCAL_STORAGE_DEVICE_NAME) ?? '',
+    server,
     windowWidth: window.innerWidth,
     navigatorLanguage: navigator.language,
   },
