@@ -1,12 +1,18 @@
 .Stats {
+  position: relative;
   display: flex;
   flex-grow: 1;
   align-items: center;
-  overflow-y: scroll;
+
+  &_pageWrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    overflow-y: scroll;
+  }
 
   &_container {
     display: flex;
-    overflow: auto;
     width: 100%;
     max-width: var(--max-page-width);
     flex-direction: column;
@@ -34,5 +40,10 @@
     flex-direction: column;
     flex-grow: 1;
     gap: 10px;
+  }
+
+  &_total {
+    font-size: 18px;
+    font-weight: 700;
   }
 }

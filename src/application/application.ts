@@ -10,7 +10,7 @@ import {
   socket,
 } from './socket'
 import { store, validateCred } from './store'
-import { app, sendToElm } from './elm'
+import { app, sendToElm, SentFromElmMsg } from './elm'
 import {
   Transactions,
   validateTransactions,

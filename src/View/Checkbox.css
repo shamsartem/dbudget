@@ -1,18 +1,4 @@
 .Checkbox {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-
-  &_input {
-    height: 30px;
-    padding-left: 7px;
-    border: 1px solid var(--c-gray-6);
-    background-color: var(--c-gray-2);
-    border-radius: var(--bdrs-md);
-    color: var(--c-gray-9);
-    outline: none;
-  }
-
   &_label {
     --before-size: 20px;
 

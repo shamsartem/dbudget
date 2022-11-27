@@ -15,6 +15,8 @@ import Html exposing (..)
 import Html.Attributes exposing (class, type_)
 import Numeric.ArithmeticError exposing (ArithmeticError)
 import Numeric.Decimal as Decimal
+import Numeric.Decimal.Rounding exposing (RoundingAlgorythm(..))
+import Numeric.Nat as Nat
 import Process
 import Store exposing (SignedInData, Store)
 import Task
@@ -63,16 +65,10 @@ init store signedInData =
     let
         sortedTransactionsDataList =
             getSortedTransactionsDataList signedInData
-
-        startMin =
-            getStartMin sortedTransactionsDataList
-
-        endMax =
-            getEndMax sortedTransactionsDataList
     in
     ( { store = store
-      , startDate = startMin
-      , endDate = endMax
+      , startDate = ""
+      , endDate = ""
       , currency = getCurrencies sortedTransactionsDataList |> List.head |> Maybe.withDefault ""
       , isIncome = False
       }
@@ -150,6 +146,16 @@ getEndMax sortedTransactionsDataList =
         |> Maybe.withDefault ""
 
 
+hundredPercent : Float
+hundredPercent =
+    100
+
+
+percentPrecisionFloat : Float
+percentPrecisionFloat =
+    100
+
+
 view : Model -> Html Msg
 view model =
     let
@@ -180,7 +186,7 @@ view model =
 
                 endMin =
                     if model.startDate == "" then
-                        startMin
+                        ""
 
                     else
                         model.startDate
@@ -236,103 +242,125 @@ view model =
                             (Ok Dict.empty)
             in
             div [ class baseClass, class "page" ]
-                [ Header.view Header.Stats
-                , div [ c "container" ]
-                    [ div [ c "checkboxContainer" ]
-                        [ Checkbox.view
-                            { label = "Is Income"
-                            , onCheck = SetIsIncome
-                            , checked = model.isIncome
-                            , required = False
-                            , id = "isIncome"
-                            , otherAttributes = []
-                            }
-                        ]
-                    , div [ c "inputContainer" ]
-                        [ Input.view
-                            { label = "Start date"
-                            , onInput = StartDateInput
-                            , onBlur = Nothing
-                            , value = model.startDate
-                            , required = True
-                            , hasPlaceholder = False
-                            , id = "startDate"
-                            , otherAttributes =
-                                [ type_ "date"
-                                , Html.Attributes.min startMin
-                                , Html.Attributes.max startMax
-                                ]
-                            , textUnderInput = Input.NoText
-                            , dirty = False
-                            , maybeDatalist = Nothing
-                            , hasClearButton = False
-                            }
-                        , Input.view
-                            { label = "End date"
-                            , onInput = EndDateInput
-                            , onBlur = Nothing
-                            , value = model.endDate
-                            , required = True
-                            , hasPlaceholder = False
-                            , id = "endDate"
-                            , otherAttributes =
-                                [ type_ "date"
-                                , Html.Attributes.min endMin
-                                , Html.Attributes.max endMax
-                                ]
-                            , textUnderInput = Input.NoText
-                            , dirty = False
-                            , maybeDatalist = Nothing
-                            , hasClearButton = False
-                            }
-                        ]
-                    , div [ c "inputContainer" ]
-                        [ Input.view
-                            { label = "Currency"
-                            , onInput = CurrencyInput
-                            , onBlur = Nothing
-                            , value = model.currency
-                            , required = True
-                            , hasPlaceholder = False
-                            , id = "currency"
-                            , otherAttributes = []
-                            , textUnderInput = Input.NoText
-                            , dirty = False
-                            , maybeDatalist =
-                                Just
-                                    { list = getCurrencies filteredTransactions
-                                    , onSelect = SelectedCurrency
-                                    }
-                            , hasClearButton = True
-                            }
-                        ]
-                    , div [ c "chartContainer" ]
-                        (case chartDataResult of
+                [ div [ c "pageWrapper", class "fullSize" ]
+                    [ Header.view Header.Stats
+                    , div [ c "container" ]
+                        [ div [ c "checkboxContainer" ]
+                            [ Checkbox.view
+                                { label = "Is Income"
+                                , onCheck = SetIsIncome
+                                , checked = model.isIncome
+                                , required = False
+                                , id = "isIncome"
+                                , otherAttributes = []
+                                }
+                            ]
+                        , div [ c "inputContainer" ]
+                            [ Input.view
+                                { label = "Start date"
+                                , onInput = StartDateInput
+                                , onBlur = Nothing
+                                , value = model.startDate
+                                , required = True
+                                , hasPlaceholder = False
+                                , id = "startDate"
+                                , otherAttributes =
+                                    [ type_ "date"
+                                    , Html.Attributes.min startMin
+                                    , Html.Attributes.max startMax
+                                    ]
+                                , textUnderInput = Input.NoText
+                                , dirty = False
+                                , maybeDatalist = Nothing
+                                , hasClearButton = False
+                                }
+                            , Input.view
+                                { label = "End date"
+                                , onInput = EndDateInput
+                                , onBlur = Nothing
+                                , value = model.endDate
+                                , required = True
+                                , hasPlaceholder = False
+                                , id = "endDate"
+                                , otherAttributes =
+                                    [ type_ "date"
+                                    , Html.Attributes.min endMin
+                                    , Html.Attributes.max endMax
+                                    ]
+                                , textUnderInput = Input.NoText
+                                , dirty = False
+                                , maybeDatalist = Nothing
+                                , hasClearButton = False
+                                }
+                            ]
+                        , div [ c "inputContainer" ]
+                            [ Input.view
+                                { label = "Currency"
+                                , onInput = CurrencyInput
+                                , onBlur = Nothing
+                                , value = model.currency
+                                , required = True
+                                , hasPlaceholder = False
+                                , id = "currency"
+                                , otherAttributes = []
+                                , textUnderInput = Input.NoText
+                                , dirty = False
+                                , maybeDatalist =
+                                    Just
+                                        { list = getCurrencies filteredTransactions
+                                        , onSelect = SelectedCurrency
+                                        }
+                                , hasClearButton = True
+                                }
+                            ]
+                        , case chartDataResult of
                             Ok chartData ->
                                 let
-                                    chartList =
+                                    chartDataList =
                                         Dict.toList chartData
+
+                                    precision =
+                                        List.head chartDataList
+                                            |> Maybe.map Tuple.second
+                                            |> Maybe.map Decimal.getPrecision
+                                            |> Maybe.withDefault Nat.nat0
+
+                                    sumResult =
+                                        List.foldl
+                                            (\( _, value ) accResult -> accResult |> Result.andThen (\acc -> Decimal.addBounded acc value))
+                                            (Ok (Decimal.succeed RoundDown precision 0))
+                                            chartDataList
+
+                                    chartList =
+                                        chartDataList
                                             |> List.map
                                                 (\( category, value ) ->
                                                     ( category, value |> Decimal.toFloat )
                                                 )
                                             |> List.sortBy (Tuple.second >> negate)
-
-                                    sum =
-                                        List.foldl (\( _, value ) acc -> acc + value) 0 chartList
                                 in
-                                chartList
-                                    |> List.map
-                                        (\( currency, val ) ->
-                                            div [ c "category" ]
-                                                [ text (String.fromFloat (toFloat (round (val / sum * 10000)) / 100) ++ "% ")
-                                                , text currency
-                                                ]
-                                        )
+                                case sumResult of
+                                    Ok sumDecimal ->
+                                        div [ c "chartContainer" ]
+                                            (div [ c "total" ] [ text ("Total: " ++ Decimal.toString sumDecimal ++ " " ++ model.currency) ]
+                                                :: (chartList
+                                                        |> List.map
+                                                            (\( category, val ) ->
+                                                                div [ c "category" ]
+                                                                    [ text (String.fromFloat (toFloat (round (val / (sumDecimal |> Decimal.toFloat) * percentPrecisionFloat * hundredPercent)) / percentPrecisionFloat) ++ "%")
+                                                                    , text (" " ++ category)
+                                                                    , text (" (" ++ String.fromFloat val ++ " " ++ model.currency ++ ")")
+                                                                    ]
+                                                            )
+                                                   )
+                                            )
+
+                                    Err _ ->
+                                        text "Can't calculate such a large sum"
 
                             Err _ ->
-                                [ text "Error when summing up transactions" ]
-                        )
+                                text "Error when summing up transactions"
+                        ]
                     ]
                 ]
 

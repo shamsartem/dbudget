@@ -1,0 +1,9 @@
+{
+  "postprocess": ["elm-watch-node", "postprocess.mjs"],
+  "targets": {
+    "dbudget": {
+      "inputs": ["src/Main.elm"],
+      "output": "public/elm.js"
+    }
+  }
+}

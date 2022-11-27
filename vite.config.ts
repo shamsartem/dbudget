@@ -1,22 +1,10 @@
 import { defineConfig } from 'vite'
-import elmPlugin from 'vite-plugin-elm'
 import { VitePWA } from 'vite-plugin-pwa'
 
 // eslint-disable-next-line import/no-default-export
 export default defineConfig({
   plugins: [
-    elmPlugin({ debug: false }),
     VitePWA({
-      includeAssets: [
-        'apple-touch-icon.png',
-        'browserconfig.xml',
-        'favicon-16x16.png',
-        'favicon-32x32',
-        'favicon.ico',
-        'mstile-150x150.png',
-        'robots.txt',
-        'safari-pinned-tab.svg',
-      ],
       manifest: {
         name: 'dbudget',
         short_name: 'dbudget',
