@@ -1,23 +1,33 @@
 *,
-::before,
-::after {
+*::before,
+*::after {
   box-sizing: border-box;
+}
+
+* {
+  padding: 0;
+  border: none;
+  margin: 0;
+  background-color: initial;
+  color: inherit;
+  font-size: inherit;
+  text-decoration: none;
+}
+
+button {
+  appearance: none;
 }
 
 html {
   display: flex;
   min-height: 100%;
-  background-color: var(--c-gray-1);
-  color: var(--c-gray-9);
-  font-family: var(--ff-default);
-  font-size: var(--fz-md);
-  line-height: var(--lh-md);
+  font-size: 18px;
 }
 
 body {
   display: flex;
   width: 100%;
-  min-width: var(--min-page-width);
+  min-width: 320px;
   flex-direction: column;
   flex-grow: 1;
 }

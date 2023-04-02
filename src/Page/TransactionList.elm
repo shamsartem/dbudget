@@ -305,8 +305,8 @@ type InitType
     | NoDialog
 
 
-init : InitType -> Store -> Store.SignedInData -> ( Model, Cmd Msg )
-init initType store signedInData =
+init : InitType -> Store -> ( Model, Cmd Msg )
+init initType store =
     let
         hasDialog ( dialogModel, dialogCmd ) =
             ( DialogModel dialogModel, Just dialogCmd )
@@ -317,24 +317,19 @@ init initType store signedInData =
                     TransactionDialog.init
                         TransactionDialog.New
                         store
-                        signedInData
                         |> hasDialog
 
                 Edit id ->
                     TransactionDialog.init
                         (TransactionDialog.Edit id)
                         store
-                        signedInData
                         |> hasDialog
 
                 NoDialog ->
-                    ( WithoutDialog
-                        { store = { store | signedInData = Just signedInData } }
-                    , Nothing
-                    )
+                    ( WithoutDialog { store = store }, Nothing )
 
         allTransactions =
-            transactionsToDisplayedTransactions signedInData.transactions
+            transactionsToDisplayedTransactions store.transactions
     in
     ( { dialogModel = transactionDialogModel
       , allTransactions = allTransactions

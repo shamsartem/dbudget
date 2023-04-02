@@ -5,6 +5,7 @@ import * as UglifyJS from 'uglify-js'
 /**
  * @type {import("elm-watch/elm-watch-node").Postprocess}
  */
+// eslint-disable-next-line import/no-default-export
 export default async function postprocess({ code, compilationMode }) {
   switch (compilationMode) {
     case 'standard':
@@ -41,11 +42,17 @@ const pureFuncs = [
 ]
 
 // Source: https://discourse.elm-lang.org/t/what-i-ve-learned-about-minifying-elm-code/7632
+/**
+ * @param {string | string[] | { [file: string]: string;}} code
+ * @return {Promise<string>}
+ */
 async function minify(code) {
   const result = UglifyJS.minify(code, {
     compress: {
       ...Object.fromEntries(
+        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
         // @ts-ignore
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call
         Object.entries(UglifyJS.default_options().compress).map(
           ([key, value]) => [key, value === true ? false : value],
         ),

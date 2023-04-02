@@ -4,8 +4,6 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  animation: appear 0.3s ease-in-out forwards;
-  background-color: var(--c-gray-1-8);
   text-align: center;
 
   &_closeButton {
@@ -26,8 +24,7 @@
       position: absolute;
       width: 60%;
       height: 3px;
-      background-color: var(--c-gray-7);
-      content: "";
+      content: '';
       transform: rotate(45deg);
     }
 
@@ -44,10 +41,9 @@
     max-height: 100%;
     flex-direction: column;
     align-items: center;
-    padding: var(--space-lg);
-    border: 1px solid var(--c-gray-5);
-    background-color: var(--c-gray-1);
-    border-radius: var(--bdrs-md);
+    padding: 20px;
+    border: 1px solid gray;
+    background-color: #fff;
   }
 
   &_title {
@@ -56,7 +52,7 @@
   }
 
   &_body {
-    padding: var(--space-lg);
+    padding: 20px;
     line-height: 1.5;
     text-align: left;
     white-space: pre-wrap;

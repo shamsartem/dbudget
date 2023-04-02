@@ -26,5 +26,7 @@ dist-ssr
 # elm
 elm-stuff
 public/elm.js
+src/app/elm-ts-interop.d.ts
 
+# vercel
 public/.vercel

@@ -13,11 +13,11 @@ import Url.Parser as Parser exposing ((</>), Parser, oneOf, s)
 
 
 type Route
-    = TransactionList
+    = Landing
+    | TransactionList
     | TransactionNew
     | Transaction Uuid
     | CSV
-    | SignOut
     | Stats
 
 
@@ -29,12 +29,12 @@ uuidUrlParser =
 routeParser : Parser (Route -> a) a
 routeParser =
     oneOf
-        [ Parser.map TransactionList Parser.top
-        , Parser.map TransactionNew (s "transaction" </> s "new")
-        , Parser.map Transaction (s "transaction" </> uuidUrlParser)
-        , Parser.map CSV (s "csv")
+        [ Parser.map Landing Parser.top
+        , Parser.map TransactionList (s "transactions")
+        , Parser.map TransactionNew (s "transactions" </> s "new")
+        , Parser.map Transaction (s "transactions" </> uuidUrlParser)
         , Parser.map Stats (s "stats")
-        , Parser.map SignOut (s "sign-out")
+        , Parser.map CSV (s "csv")
         ]
 
 
@@ -74,24 +74,20 @@ routeToString page =
 routeToPath : Route -> List String
 routeToPath page =
     case page of
-        TransactionList ->
+        Landing ->
             []
 
+        TransactionList ->
+            [ "transactions" ]
+
         TransactionNew ->
-            [ "transaction"
-            , "new"
-            ]
+            [ "transactions", "new" ]
 
         Transaction id ->
-            [ "transaction"
-            , Prng.Uuid.toString id
-            ]
+            [ "transactions", Prng.Uuid.toString id ]
 
         Stats ->
             [ "stats" ]
 
         CSV ->
             [ "csv" ]
-
-        SignOut ->
-            [ "sign-out" ]

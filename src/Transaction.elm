@@ -8,13 +8,14 @@ module Transaction exposing
     , Transactions
     , csvHeaders
     , emptyTransactions
+    , fromRaw
     , getAccountsDict
     , getDecimalsDict
     , getDefaultTransactionValue
     , getFullPrice
-    , getPrice
     , getNewTransactionTemplate
     , getNotDeletedTransactionDataList
+    , getPrice
     , getTransaction
     , getTransactionData
     , getTransactions
@@ -30,6 +31,7 @@ module Transaction exposing
 
 import Array exposing (Array)
 import Dict exposing (Dict)
+import InteropDefinitions
 import Iso8601
 import Json.Encode
 import Numeric.ArithmeticError as ArithmeticError exposing (ArithmeticError)
@@ -228,7 +230,6 @@ type alias Data =
     , account : String
     , id : Uuid
     , lastUpdated : Posix
-    , isDeleted : Bool
     }
 
 
@@ -252,9 +253,8 @@ getDefaultTransactionValue id =
     , description = ""
     , currency = ""
     , account = ""
-    , id = id
     , lastUpdated = Time.millisToPosix 0
-    , isDeleted = False
+    , id = id
     }
 
 
@@ -415,11 +415,7 @@ validateTransactionData :
     -> Data
     -> Result (List ( Field, String )) (Validate.Valid Data)
 validateTransactionData transactions transactionData =
-    if transactionData.isDeleted then
-        validate (Validate.all []) transactionData
-
-    else
-        validate (transactionValidator transactions) transactionData
+    validate (transactionValidator transactions) transactionData
 
 
 
@@ -442,12 +438,30 @@ type alias TransactionsData =
     { transactionsDict : TransactionsDict
     , decimalsDict : DecimalsDict
     , accountsDict : AccountsDict
-    , notDeletedTransactionDataList : List Data
+    , transactionDataList : List Data
     }
 
 
 type Transactions
     = Transactions TransactionsData
+
+
+fromRaw :
+    UuidSeed
+    -> InteropDefinitions.TransactionsRaw
+    ->
+        { invalidTransactionData : List Data
+        , newUuidSeed : UuidSeed
+        , transactions : Transactions
+        }
+fromRaw uuidSeed transactionsRaw =
+    let
+        listOfArrays =
+            transactionsRaw.transactionsDict
+                |> Dict.toList
+                |> List.map (\( key, value ) -> Array.push key (Array.fromList value))
+    in
+    listOfRowsToTransactions uuidSeed transactionsRaw.posix listOfArrays
 
 
 emptyTransactions : Transactions
@@ -456,7 +470,7 @@ emptyTransactions =
         { transactionsDict = Dict.empty
         , decimalsDict = Dict.empty
         , accountsDict = Dict.empty
-        , notDeletedTransactionDataList = []
+        , transactionDataList = []
         }
 
 
@@ -466,7 +480,7 @@ getTransactions transactionsDict =
         { transactionsDict = transactionsDict
         , decimalsDict = transactionsToDecimals transactionsDict
         , accountsDict = transactionsToAccountsDict transactionsDict
-        , notDeletedTransactionDataList = constructNotDeletedTransactionDataList transactionsDict
+        , transactionDataList = constructNotDeletedTransactionDataList transactionsDict
         }
 
 
@@ -486,54 +500,46 @@ getAccountsDict (Transactions { accountsDict }) =
 
 
 getNotDeletedTransactionDataList : Transactions -> List Data
-getNotDeletedTransactionDataList (Transactions { notDeletedTransactionDataList }) =
-    notDeletedTransactionDataList
+getNotDeletedTransactionDataList (Transactions { transactionDataList }) =
+    transactionDataList
 
 
 constructNotDeletedTransactionDataList : TransactionsDict -> List Data
 constructNotDeletedTransactionDataList transactionsDict =
     Dict.values transactionsDict
         |> List.map (\transaction -> getTransactionData transaction)
-        |> List.filter
-            (\{ isDeleted } ->
-                not isDeleted
-            )
 
 
 updateDecimalsDict : Data -> DecimalsDict -> DecimalsDict
 updateDecimalsDict transactionData decimals =
     let
-        { price, currency, isDeleted } =
+        { price, currency } =
             transactionData
     in
-    if isDeleted then
-        decimals
+    stringToDecimal price Nat.nat0 0
+        |> Result.map
+            (\decimal ->
+                Dict.update
+                    currency
+                    (\maybePrevPrecision ->
+                        let
+                            prevPrecision =
+                                Maybe.withDefault Nat.nat0 maybePrevPrecision
 
-    else
-        stringToDecimal price Nat.nat0 0
-            |> Result.map
-                (\decimal ->
-                    Dict.update
-                        currency
-                        (\maybePrevPrecision ->
-                            let
-                                prevPrecision =
-                                    Maybe.withDefault Nat.nat0 maybePrevPrecision
+                            currentPrecision =
+                                decimal |> Decimal.getPrecision
+                        in
+                        Just
+                            (if Nat.toInt currentPrecision > Nat.toInt prevPrecision then
+                                currentPrecision
 
-                                currentPrecision =
-                                    decimal |> Decimal.getPrecision
-                            in
-                            Just
-                                (if Nat.toInt currentPrecision > Nat.toInt prevPrecision then
-                                    currentPrecision
-
-                                 else
-                                    prevPrecision
-                                )
-                        )
-                        decimals
-                )
-            |> Result.withDefault decimals
+                             else
+                                prevPrecision
+                            )
+                    )
+                    decimals
+            )
+        |> Result.withDefault decimals
 
 
 transactionsToDecimals : TransactionsDict -> DecimalsDict
@@ -570,7 +576,9 @@ transactionsToAccountsDict transactionsDict =
 
 
 
--- don't forget to update csvHeaders as well
+{-
+   WARNING! don't forget to update csvHeaders as well
+-}
 
 
 toListOfListsOfStrings : TransactionsDict -> List (List String)
@@ -580,7 +588,7 @@ toListOfListsOfStrings transactionsDict =
         |> List.map
             (\( _, transation ) ->
                 let
-                    { isIncome, date, category, name, price, amount, description, currency, account, id, lastUpdated, isDeleted } =
+                    { isIncome, date, category, name, price, amount, description, currency, account, id, lastUpdated } =
                         getTransactionData transation
                 in
                 [ boolToString isIncome -- 0
@@ -592,12 +600,13 @@ toListOfListsOfStrings transactionsDict =
                 , description -- 6
                 , currency -- 7
                 , account -- 8
-                , Prng.Uuid.toString id -- 9
                 , lastUpdated
-                    -- 10
+                    -- 9
                     |> Time.posixToMillis
                     |> String.fromInt
-                , boolToString isDeleted -- 11
+
+                -- Always leave id as the last column
+                , Prng.Uuid.toString id -- 10
                 ]
             )
 
@@ -613,9 +622,8 @@ csvHeaders =
     , "Description"
     , "Currency"
     , "Account"
-    , "Id"
     , "Last Updated"
-    , "Is Deleted"
+    , "Id"
     ]
 
 
@@ -643,17 +651,17 @@ listOfRowsToTransactions uuidSeed timeNow listOfRows =
     List.foldl
         (\valueArray { invalidTransactionData, newUuidSeed, transactions } ->
             let
-                (Transactions { transactionsDict, decimalsDict, accountsDict, notDeletedTransactionDataList }) =
+                (Transactions { transactionsDict, decimalsDict, accountsDict, transactionDataList }) =
                     transactions
 
                 maybeId =
-                    Array.get 9 valueArray
+                    Array.get 10 valueArray
                         |> Maybe.andThen (\stringId -> Prng.Uuid.fromString stringId)
 
                 ( id, seed ) =
                     case maybeId of
                         Nothing ->
-                            Uuid.getNewUuid newUuidSeed
+                            Uuid.new newUuidSeed
 
                         Just uuid ->
                             ( uuid, newUuidSeed )
@@ -717,13 +725,10 @@ listOfRowsToTransactions uuidSeed timeNow listOfRows =
                     getStringWithdefault 8 .currency
 
                 lastUpdated =
-                    Array.get 10 valueArray
+                    Array.get 9 valueArray
                         |> Maybe.andThen (\str -> String.toInt str)
                         |> Maybe.map (\int -> Time.millisToPosix int)
                         |> Maybe.withDefault defaultTransactionValue.lastUpdated
-
-                isDeleted =
-                    getBoolWithdefault 11 .isDeleted
 
                 transactionData : Data
                 transactionData =
@@ -738,7 +743,6 @@ listOfRowsToTransactions uuidSeed timeNow listOfRows =
                     , account = account
                     , id = id
                     , lastUpdated = lastUpdated
-                    , isDeleted = isDeleted
                     }
 
                 idString =
@@ -763,12 +767,8 @@ listOfRowsToTransactions uuidSeed timeNow listOfRows =
                                 updateAccountsDict
                                     transactionData
                                     accountsDict
-                            , notDeletedTransactionDataList =
-                                if isDeleted then
-                                    notDeletedTransactionDataList
-
-                                else
-                                    transactionData :: notDeletedTransactionDataList
+                            , transactionDataList =
+                                transactionData :: transactionDataList
                             }
                     }
 
@@ -783,41 +783,6 @@ listOfRowsToTransactions uuidSeed timeNow listOfRows =
         , transactions = emptyTransactions
         }
         listOfRows
-
-
-
--- type alias TransactionsFromJs =
---     List (Array String)
--- -- used only for transactions from localStorage
--- stringToTransactionDict :
---     UuidSeed
---     -> String
---     ->
---         { invalidTransactionData : List Data
---         , newUuidSeed : UuidSeed
---         , transactions : Transactions
---         }
--- stringToTransactionDict uuidSeed string =
---     case
---         Json.Decode.decodeString
---             (Json.Decode.field "payload"
---                 (Json.Decode.list
---                     (Json.Decode.array Json.Decode.string)
---                 )
---             )
---             string
---     of
---         Ok payload ->
---             listOfRowsToTransactionsDict
---                 uuidSeed
---                 (Time.millisToPosix 0)
---                 payload
---         Err _ ->
---             { invalidTransactionData = []
---             , newUuidSeed = uuidSeed
---             , transactions = emptyTransactions
---             }
--- UTILS
 
 
 getNewTransactionTemplate : Transactions -> Prng.Uuid.Uuid -> Data

@@ -1,0 +1,27 @@
+.Landing {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+
+  &_title {
+    width: 100%;
+    max-width: 600px;
+    margin-top: 200px;
+    font-family: var(--ff-h);
+    font-size: 40px;
+    text-align: center;
+    @media (--medium) {
+      max-width: 500px;
+      font-size: 60px;
+    }
+  }
+
+  &_start {
+    padding: 10px 20px;
+    border-radius: var(--bdrs-full);
+    margin-top: 50px;
+    background-color: lightgray;
+    cursor: pointer;
+    text-align: center;
+  }
+}

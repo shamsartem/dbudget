@@ -1,0 +1,28 @@
+:root {
+  /* Font */
+  --ff-default: arial, sans-serif;
+  --ff-h: rockwell, 'Rockwell Nova', 'Roboto Slab', 'DejaVu Serif',
+    'Sitka Small', serif;
+
+  /* Border radius */
+  --bdrs-sm: 5px;
+  --bdrs-md: 7px;
+  --bdrs-full: 99999px;
+
+  /* Transition */
+  --t: 0.2s ease-in-out;
+
+  /* Shadows */
+  --shadow-default: 6px 6px 35px rgb(112 123 177 / 20%);
+
+  /* Spaces */
+  --max-page-width: 500px;
+  --min-page-width: 320px;
+
+  /* z-index */
+  --z-default: 100;
+
+  /* font-weight */
+  --fw-bold: 700;
+  --fw-extra-bold: 900;
+}

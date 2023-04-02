@@ -14,6 +14,7 @@ import Html.Attributes
         , for
         , id
         , placeholder
+        , property
         , required
         , tabindex
         , title
@@ -26,6 +27,7 @@ import Html.Events
         , onClick
         , onInput
         )
+import Json.Encode as Encode
 
 
 type TextUnderInput
@@ -293,20 +295,24 @@ view config =
                                 , "textUnderInput__warning"
                                 , "textUnderInput__visible"
                                 ]
-
-        dataListView =
-            case config.maybeDatalist of
-                Nothing ->
-                    text ""
-
-                Just { list } ->
-                    datalist
-                        [ id datalistId ]
-                        (List.map
-                            (\item -> option [ value (item ++ invisibleChar) ] [])
-                            (List.take 30 list)
-                        )
     in
-    div
-        [ class baseClass ]
-        [ viewlabel, viewInput, textUnderInput, dataListView ]
+    case config.maybeDatalist of
+        Nothing ->
+            div
+                [ class baseClass ]
+                [ viewlabel, viewInput, textUnderInput ]
+
+        Just { list } ->
+            node "db-combobox"
+                [ attribute "label" config.label
+                , value config.value
+                , onInput config.onInput
+                ]
+                (List.take 30 list
+                    |> List.map
+                        (\option ->
+                            node "db-option"
+                                [ property "choiceValue" (Encode.string option) ]
+                                [ text option ]
+                        )
+                )

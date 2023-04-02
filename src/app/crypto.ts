@@ -1,5 +1,3 @@
-import JSZip from 'jszip'
-
 import { sendToElm } from './elm'
 
 const IV_LENGTH = 12
@@ -37,25 +35,6 @@ const getEncryptionKey = async (
 }
 
 const DATA = 'data.json'
-
-const prepareZip = (data: unknown): JSZip =>
-  new JSZip().file(DATA, JSON.stringify(data))
-
-const compressUint8Array = (data: unknown): Promise<Uint8Array> =>
-  prepareZip(data).generateAsync({ type: 'uint8array' })
-
-export const compressString = (data: unknown): Promise<string> =>
-  prepareZip(data).generateAsync({ type: 'binarystring' })
-
-export const decompress = async (
-  ...args: Parameters<typeof JSZip.loadAsync>
-): Promise<unknown> => {
-  const zipFile = await JSZip.loadAsync(...args)
-  const result: unknown = JSON.parse(
-    (await zipFile.file(DATA)?.async('string')) ?? '',
-  )
-  return result
-}
 
 export const encrypt = async (
   data: unknown,

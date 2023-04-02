@@ -2,14 +2,15 @@
   "extends": "@tsconfig/strictest/tsconfig.json",
   "compilerOptions": {
     "target": "ESNext",
-    "moduleResolution": "node",
-    "declaration": true,
-    "outDir": "dist",
-    "module": "commonjs",
-    "lib": ["ESNext", "DOM", "WebWorker"],
-    "sourceMap": true,
-    "types": ["vite-plugin-pwa/client"],
-    "resolveJsonModule": true
+    "useDefineForClassFields": true,
+    "module": "ESNext",
+    "lib": ["ESNext", "DOM"],
+    "moduleResolution": "Node",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "experimentalDecorators": true,
+    "types": ["node_modules/@lion/ui/dist-types", "vitest/globals"]
   },
-  "include": ["./src/application", "./vite.config.ts"]
+  "include": ["src"]
 }

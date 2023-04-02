@@ -5,6 +5,7 @@
     "esbenp.prettier-vscode",
     "stylelint.vscode-stylelint",
     "vunguyentuan.vscode-css-variables",
-    "dbaeumer.vscode-eslint"
+    "dbaeumer.vscode-eslint",
+    "ZixuanChen.vitest-explorer"
   ]
 }

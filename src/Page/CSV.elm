@@ -19,7 +19,6 @@ import File.Select as Select
 import Html exposing (..)
 import Html.Attributes exposing (class)
 import Html.Events exposing (onClick)
-import Port
 import Store exposing (Store)
 import Task
 import Time exposing (Posix)
@@ -87,21 +86,11 @@ setStore store model =
     }
 
 
-getSignedInData : Model -> Maybe Store.SignedInData
-getSignedInData model =
-    case model.dialogModel of
-        WithoutDialog m ->
-            m.store.signedInData
-
-        DialogModel m ->
-            m.store.signedInData
-
-
-init : Store -> Store.SignedInData -> ( Model, Cmd Msg )
-init store signedInData =
+init : Store -> ( Model, Cmd Msg )
+init store =
     let
         { invalidTransactionData } =
-            signedInData
+            store
 
         maybeFirstInvalidTransaction =
             invalidTransactionData
@@ -113,18 +102,12 @@ init store signedInData =
         ( transactionDialogModel, transactionDialogMsg ) =
             case maybeFirstInvalidTransaction of
                 Nothing ->
-                    ( WithoutDialog { store = { store | signedInData = Just signedInData } }, Nothing )
+                    ( WithoutDialog { store = store }, Nothing )
 
                 Just invalidTransaction ->
                     TransactionDialog.init
                         (TransactionDialog.Invalid invalidTransaction)
                         store
-                        { signedInData
-                            | invalidTransactionData =
-                                Maybe.withDefault
-                                    []
-                                    (List.tail invalidTransactionData)
-                        }
                         |> hasDialog
     in
     ( { dialogModel = transactionDialogModel
@@ -195,156 +178,144 @@ update msg model =
         store =
             getStore model
     in
-    case getSignedInData model of
-        Nothing ->
-            ( model, Cmd.none )
+    case msg of
+        CsvRequested ->
+            ( { model | csv = NoCsv }
+            , Select.file
+                [ "text/csv" ]
+                CsvSelected
+            )
 
-        Just signedInData ->
-            case msg of
-                CsvRequested ->
-                    ( { model | csv = NoCsv }
-                    , Select.file
-                        [ "text/csv" ]
-                        CsvSelected
-                    )
+        CsvSelected file ->
+            ( { model | csv = ParsingCsv }
+            , Task.perform CsvLoaded (File.toString file)
+            )
 
-                CsvSelected file ->
-                    ( { model | csv = ParsingCsv }
-                    , Task.perform CsvLoaded (File.toString file)
-                    )
-
-                CsvLoaded content ->
-                    case Csv.parse content of
-                        Ok { records } ->
-                            ( { model
-                                | csv =
-                                    ParsedCsv
-                              }
-                            , Task.perform CsvParsed
-                                (Task.succeed
-                                    (records
-                                        |> List.map (\l -> Array.fromList l)
-                                    )
-                                )
+        CsvLoaded content ->
+            case Csv.parse content of
+                Ok { records } ->
+                    ( { model
+                        | csv =
+                            ParsedCsv
+                      }
+                    , Task.perform CsvParsed
+                        (Task.succeed
+                            (records
+                                |> List.map (\l -> Array.fromList l)
                             )
+                        )
+                    )
 
-                        Err list ->
-                            ( { model
-                                | csv =
-                                    CsvParsingError
-                                        (list
-                                            |> List.foldl
-                                                (\{ row, col } acc ->
-                                                    acc
-                                                        ++ "row: "
-                                                        ++ String.fromInt row
-                                                        ++ " column: "
-                                                        ++ String.fromInt col
-                                                        ++ "\n"
-                                                )
-                                                "Problems in:\n"
+                Err list ->
+                    ( { model
+                        | csv =
+                            CsvParsingError
+                                (list
+                                    |> List.foldl
+                                        (\{ row, col } acc ->
+                                            acc
+                                                ++ "row: "
+                                                ++ String.fromInt row
+                                                ++ " column: "
+                                                ++ String.fromInt col
+                                                ++ "\n"
                                         )
-                              }
-                            , Cmd.none
-                            )
-
-                CsvParsed records ->
-                    ( model
-                    , Time.now
-                        |> Task.perform (GotTimeNowAfterCsvParsed records)
-                    )
-
-                GotTimeNowAfterCsvParsed records timeNow ->
-                    let
-                        { transactions, invalidTransactionData, newUuidSeed } =
-                            Transaction.listOfRowsToTransactions
-                                store.uuidSeed
-                                timeNow
-                                records
-
-                        maybeFirstInvalidTransaction =
-                            invalidTransactionData |> List.head
-
-                        newTransactions =
-                            Transaction.mergeTransactions
-                                signedInData.transactions
-                                (Transaction.getTransactionsDict transactions)
-
-                        newSignedInData =
-                            { signedInData
-                                | transactions = newTransactions
-                                , invalidTransactionData =
-                                    Maybe.withDefault
-                                        []
-                                        (List.tail invalidTransactionData)
-                            }
-
-                        newStore =
-                            { store | uuidSeed = newUuidSeed, signedInData = Just newSignedInData }
-
-                        updateBasedOnInvalidTransactionData dialogModel cmd =
-                            ( { model | dialogModel = dialogModel }
-                            , Cmd.batch
-                                [ Port.send
-                                    (Port.UpdatedTransactions
-                                        newTransactions
-                                        transactions
-                                    )
-                                , cmd
-                                ]
-                            )
-                    in
-                    case maybeFirstInvalidTransaction of
-                        Nothing ->
-                            updateBasedOnInvalidTransactionData
-                                (WithoutDialog
-                                    { store = newStore
-                                    }
+                                        "Problems in:\n"
                                 )
-                                Cmd.none
-
-                        Just invalidTransaction ->
-                            let
-                                ( m, cm ) =
-                                    TransactionDialog.init
-                                        (TransactionDialog.Invalid invalidTransaction)
-                                        newStore
-                                        newSignedInData
-                            in
-                            updateBasedOnInvalidTransactionData
-                                (DialogModel m)
-                                (Cmd.map GotDialogMsg cm)
-
-                CsvExport ->
-                    let
-                        csvString =
-                            signedInData.transactions
-                                |> Transaction.getTransactionsDict
-                                |> Transaction.toListOfListsOfStrings
-                                |> (\list ->
-                                        { headers = Transaction.csvHeaders
-                                        , records = list
-                                        }
-                                   )
-                                |> Csv.Encode.toString
-                    in
-                    ( model
-                    , File.Download.string "transactions.csv" "text/csv" csvString
+                      }
+                    , Cmd.none
                     )
 
-                GotDialogMsg dialogMsg ->
-                    case model.dialogModel of
-                        WithoutDialog _ ->
-                            ( model, Cmd.none )
+        CsvParsed records ->
+            ( model
+            , Time.now
+                |> Task.perform (GotTimeNowAfterCsvParsed records)
+            )
 
-                        DialogModel dialogModel ->
-                            let
-                                ( newDialogModel, newDialogCmd ) =
-                                    TransactionDialog.update dialogMsg dialogModel
-                            in
-                            ( { model | dialogModel = DialogModel newDialogModel }
-                            , Cmd.map GotDialogMsg newDialogCmd
-                            )
+        GotTimeNowAfterCsvParsed records timeNow ->
+            let
+                { transactions, invalidTransactionData, newUuidSeed } =
+                    Transaction.listOfRowsToTransactions
+                        store.uuidSeed
+                        timeNow
+                        records
+
+                allInvalidTransactions =
+                    List.concat [ invalidTransactionData, store.invalidTransactionData ]
+
+                maybeFirstInvalidTransaction =
+                    allInvalidTransactions |> List.head
+
+                newTransactions =
+                    Transaction.mergeTransactions
+                        store.transactions
+                        (Transaction.getTransactionsDict transactions)
+
+                newStore =
+                    { store
+                        | uuidSeed = newUuidSeed
+                        , transactions = newTransactions
+                        , invalidTransactionData =
+                            Maybe.withDefault
+                                []
+                                (List.tail allInvalidTransactions)
+                    }
+
+                updateBasedOnInvalidTransactionData dialogModel cmd =
+                    ( { model | dialogModel = dialogModel }
+                    , cmd
+                    )
+            in
+            case maybeFirstInvalidTransaction of
+                Nothing ->
+                    updateBasedOnInvalidTransactionData
+                        (WithoutDialog
+                            { store = newStore
+                            }
+                        )
+                        Cmd.none
+
+                Just invalidTransaction ->
+                    let
+                        ( m, cm ) =
+                            TransactionDialog.init
+                                (TransactionDialog.Invalid invalidTransaction)
+                                newStore
+                    in
+                    updateBasedOnInvalidTransactionData
+                        (DialogModel m)
+                        (Cmd.map GotDialogMsg cm)
+
+        CsvExport ->
+            let
+                csvString =
+                    store.transactions
+                        |> Transaction.getTransactionsDict
+                        |> Transaction.toListOfListsOfStrings
+                        |> (\list ->
+                                { headers = Transaction.csvHeaders
+                                , records = list
+                                }
+                           )
+                        |> Csv.Encode.toString
+            in
+            ( model
+            , File.Download.string "transactions.csv" "text/csv" csvString
+            )
+
+        GotDialogMsg dialogMsg ->
+            case model.dialogModel of
+                WithoutDialog _ ->
+                    ( model, Cmd.none )
+
+                DialogModel dialogModel ->
+                    let
+                        ( newDialogModel, newDialogCmd ) =
+                            TransactionDialog.update dialogMsg dialogModel
+                    in
+                    ( { model | dialogModel = DialogModel newDialogModel }
+                    , Cmd.map GotDialogMsg newDialogCmd
+                    )
 
 
 subscriptions : Model -> Sub Msg

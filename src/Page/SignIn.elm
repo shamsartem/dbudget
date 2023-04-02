@@ -9,18 +9,12 @@ module Page.SignIn exposing
     , view
     )
 
-import Browser.Navigation as Nav
 import Html exposing (..)
 import Html.Attributes exposing (class, classList, disabled, novalidate, type_)
 import Html.Events exposing (onClick, onSubmit)
-import Json.Decode
-import Port
 import Prng.Uuid
 import Regex
 import Store exposing (Store, getNewUuid)
-import Time
-import Transaction
-import Url
 import Validate exposing (Validator, ifBlank, validate)
 import View.Input as Input
 import View.Loader as Loader
@@ -285,7 +279,6 @@ view model =
                 }
             , button [ class "button", disabled isDisabled ] [ text "Sign in" ]
             ]
-        , div [ c "version" ] [ text "Version 0.0.10" ]
         ]
 
 
@@ -296,7 +289,6 @@ type Msg
     | ServerInput String
     | BluredFromField Field
     | SignIn
-    | RecievedMessage Port.Message
     | NewUsernameRequested
 
 
@@ -341,15 +333,7 @@ update msg model =
                             , server = model.server
                         }
                   }
-                , Port.send
-                    (Port.SignedIn
-                        { username =
-                            model.username
-                        , deviceName = model.deviceName
-                        , password = model.password
-                        , server = model.server
-                        }
-                    )
+                , Cmd.none
                 )
 
             else
@@ -363,50 +347,6 @@ update msg model =
                   }
                 , Cmd.none
                 )
-
-        RecievedMessage { tag, payload } ->
-            case tag of
-                "SignInSuccess" ->
-                    case
-                        Json.Decode.decodeValue
-                            (Json.Decode.list
-                                (Json.Decode.array Json.Decode.string)
-                            )
-                            payload
-                    of
-                        Ok listOfRows ->
-                            let
-                                { transactions, newUuidSeed, invalidTransactionData } =
-                                    Transaction.listOfRowsToTransactions
-                                        store.uuidSeed
-                                        (Time.millisToPosix 0)
-                                        listOfRows
-                            in
-                            ( setStore
-                                { store
-                                    | signedInData =
-                                        Just
-                                            { transactions = transactions
-                                            , invalidTransactionData = invalidTransactionData
-                                            }
-                                    , uuidSeed = newUuidSeed
-                                }
-                                model
-                            , Nav.pushUrl store.navKey (Url.toString store.url)
-                            )
-
-                        Err _ ->
-                            -- TODO: solve error
-                            ( model, Cmd.none )
-
-                "WrongPassword" ->
-                    ( { model | signInState = WrongPassword }
-                    , Cmd.none
-                    )
-
-                _ ->
-                    -- ignore unknown message from js
-                    ( model, Cmd.none )
 
         BluredFromField field ->
             case field of
@@ -437,4 +377,4 @@ update msg model =
 
 subscriptions : Sub Msg
 subscriptions =
-    Port.gotMessage RecievedMessage
+    Sub.none

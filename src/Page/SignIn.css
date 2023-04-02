@@ -16,10 +16,6 @@
     &__disabled {
       opacity: 0.4;
     }
-
-    & > :not(*:last-child) {
-      margin-bottom: 15px;
-    }
   }
 
   &_usernameContainer {
@@ -34,19 +30,14 @@
 
   &_newButton {
     padding: 7px;
-    margin-left: var(--space-sm);
+    margin-left: 5px;
   }
 
   &_state {
     margin-bottom: 15px;
 
     &__wrongPassword {
-      color: var(--c-danger);
+      color: red;
     }
-  }
-
-  &_version {
-    margin-top: var(--space-lg);
-    color: var(--c-gray-4);
   }
 }

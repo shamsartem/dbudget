@@ -69,7 +69,6 @@ view config =
         checkboxattributes =
             List.append
                 [ c "input"
-                , class "visuallyHidden"
                 , onCheck config.onCheck
                 , checked config.checked
                 , id config.id

@@ -28,16 +28,16 @@ c elementAndOrModifier =
 
 
 view : ActiveNav -> Html msg
-view page =
+view activeNav =
     let
         linkto =
-            headerLink page
+            headerLink activeNav
     in
     nav [ class baseClass ]
-        [ linkto Route.TransactionList [ text "Transactions" ]
+        [ linkto Route.Landing [ text "T" ]
+        , linkto Route.TransactionList [ text "Transactions" ]
         , linkto Route.Stats [ text "Stats" ]
         , linkto Route.CSV [ text "CSV" ]
-        , linkto Route.SignOut [ text "Sign out" ]
         ]
 
 
