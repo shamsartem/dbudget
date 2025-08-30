@@ -1,63 +1,33 @@
 .Checkbox {
-  &_label {
-    --before-size: 20px;
+  position: relative;
+  display: flex;
+  height: 30px;
+}
 
-    position: relative;
-    display: flex;
-    max-width: 100%;
-    padding-left: calc(var(--before-size) + 10px);
-    margin-bottom: 3px;
-    line-height: var(--lh-sm);
+.Checkbox_input {
+  position: absolute;
+  top: 50%;
+  width: 20px;
+  height: 20px;
+  left: 0;
+  transform: translate(0, -50%);
+}
 
-    &::before,
-    &::after {
-      --size: var(--before-size);
+.Checkbox_label {
+  position: relative;
+  left: -10px;
+  display: flex;
+  max-width: 100%;
+  align-items: center;
+  padding-left: 40px;
+  line-height: var(--lh-sm);
+}
 
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: var(--size);
-      height: var(--size);
-      content: "";
-    }
+.Checkbox_required {
+  display: none;
+}
 
-    &::before {
-      border: 1px solid var(--c-gray-4);
-      border-radius: var(--bdrs-md);
-      transition: border-color 0.3s ease-in-out;
-    }
-
-    &::after {
-      --size: 12px;
-      --size-diff: calc(var(--before-size) - var(--size));
-      --offset: calc(var(--size-diff) / 2);
-
-      top: var(--offset);
-      left: var(--offset);
-      background-color: var(--c-gray-5);
-      border-radius: var(--bdrs-sm);
-      opacity: 0;
-    }
-
-    &:hover::before {
-      border-color: var(--c-gray-6);
-    }
-
-    .Checkbox_input:focus + &::before {
-      outline: 1px solid var(--c-gray-9);
-    }
-
-    .Checkbox_input:checked + &::after {
-      opacity: 1;
-    }
-  }
-
-  &_required {
-    display: none;
-
-    &__visible {
-      display: block;
-      margin-right: 5px;
-    }
-  }
+.Checkbox_required__visible {
+  display: block;
+  margin-right: 5px;
 }

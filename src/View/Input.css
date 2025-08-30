@@ -2,153 +2,115 @@
   position: relative;
   display: flex;
   flex-direction: column;
+}
 
-  &_inputContainer {
-    position: relative;
-    width: 100%;
+.Input_inputContainer {
+  position: relative;
+  width: 100%;
+}
+
+.Input_input {
+  width: 100%;
+  height: 20px;
+  border-bottom: 1px solid black;
+
+  &:disabled {
+    opacity: 0.5;
   }
+}
 
-  &_input {
-    width: 100%;
-    height: 30px;
-    padding-left: 7px;
-    border: 2px solid var(--c-gray-4);
-    background-color: var(--c-gray-2);
-    border-radius: var(--bdrs-md);
-    color: var(--c-gray-9);
-    outline: none;
+.Input_input__hasErrors {
+  border-color: red;
+}
 
-    &:focus {
-      border-color: var(--c-gray-9);
-    }
+.Input_input__hasClearButton {
+  padding-right: 23px;
+}
 
-    &__isHighlighted {
-      background-color: var(--c-warning-dark);
-    }
+.Input_label {
+  position: relative;
+  display: flex;
+  max-width: 100%;
+  margin-bottom: 3px;
+  line-height: var(--lh-sm);
+}
 
-    &__hasErrors {
-      border-color: var(--c-danger);
+.Input_required {
+  display: none;
+  margin-left: 5px;
+}
 
-      &:focus {
-        border-color: var(--c-danger-light);
-      }
-    }
+.Input_required__visible {
+  display: block;
+}
 
-    &__hasClearButton {
-      padding-right: 30px;
-    }
+.Input_textUnderInputContainer {
+  position: relative;
+  height: 20px;
+}
 
-    &::placeholder {
-      color: var(--c-gray-5);
-    }
+.Input_textUnderInput {
+  overflow: hidden;
+  height: 100%;
+  margin-top: 2px;
+  cursor: default;
+  text-overflow: ellipsis;
+  visibility: hidden;
+  white-space: nowrap;
+  background-color: #fff;
 
-    &:disabled {
-      opacity: 0.5;
-    }
-  }
-
-  &_label {
-    position: relative;
-    display: flex;
-    max-width: 100%;
-    margin-bottom: 3px;
-    line-height: var(--lh-sm);
-  }
-
-  &_required {
-    display: none;
-    margin-right: 5px;
-
-    &__visible {
-      display: block;
-    }
-  }
-
-  &_textUnderInputContainer {
-    position: relative;
-    height: 20px;
-  }
-
-  &_textUnderInput {
-    overflow: hidden;
-    height: 100%;
-    margin-top: 2px;
-    color: var(--c-danger);
-    cursor: default;
-    text-overflow: ellipsis;
-    visibility: hidden;
-    white-space: nowrap;
-
-    &__error {
-      color: var(--c-danger);
-
-      &:focus,
-      &:hover {
-        outline: 1px solid var(--c-danger);
-      }
-    }
-
-    &__warning {
-      color: var(--c-warning);
-
-      &:focus,
-      &:hover {
-        outline: 1px solid var(--c-warning);
-      }
-    }
-
-    &__visible {
-      visibility: visible;
-    }
-
-    &:focus,
-    &:hover {
-      position: absolute;
-      z-index: 1;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: auto;
-      background-color: var(--c-gray-1);
-      border-radius: var(--bdrs-sm);
-      white-space: normal;
-    }
-  }
-
-  &_clearButton {
+  &:focus,
+  &:hover {
     position: absolute;
+    z-index: 1;
     top: 0;
-    right: 1px;
-    display: flex;
-    width: 30px;
-    height: 30px;
-    align-items: center;
-    justify-content: center;
-    border-radius: 50%;
+    left: 0;
+    width: 100%;
+    height: auto;
+    border-radius: var(--bdrs-sm);
+    white-space: normal;
+  }
+}
 
-    &::before,
-    &::after {
-      position: absolute;
-      width: 40%;
-      height: 2px;
-      background-color: var(--c-gray-7);
-      content: "";
-      transform: rotate(45deg);
-    }
+.Input_textUnderInput__error {
+  color: red;
+}
 
-    &::after {
-      transform: rotate(-45deg);
-    }
+.Input_textUnderInput__warning {
+  color: orange;
+}
 
-    &:disabled {
-      cursor: default;
-      opacity: 0.5;
-    }
+.Input_textUnderInput__visible {
+  visibility: visible;
+}
+
+.Input_clearButton {
+  position: absolute;
+  top: 0;
+  right: 1px;
+  display: flex;
+  width: 20px;
+  height: 20px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+
+  &::before,
+  &::after {
+    position: absolute;
+    width: 80%;
+    height: 2px;
+    background-color: #000;
+    content: '';
+    transform: rotate(45deg);
   }
 
-  & > datalist > select {
-    width: 12em;
-    margin: 0;
-    margin-left: -12.75em;
+  &::after {
+    transform: rotate(-45deg);
+  }
+
+  &:disabled {
+    cursor: default;
+    opacity: 0.5;
   }
 }

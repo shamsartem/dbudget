@@ -1,7 +1,0 @@
-/* Don't forget to update Store.elm as well */
-
-@custom-media --medium (width >= 768px);
-
-@custom-media --large (width >= 992px);
-
-@custom-media --extraLarge (width >= 1200px);

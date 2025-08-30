@@ -1,6 +1,6 @@
-module View.Toasts exposing (..)
+module View.Toasts exposing (Config, view)
 
-import Html exposing (..)
+import Html exposing (Attribute, Html, div, text)
 import Html.Attributes exposing (class)
 
 

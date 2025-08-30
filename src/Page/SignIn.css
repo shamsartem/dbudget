@@ -3,50 +3,41 @@
   flex-grow: 1;
   align-items: center;
   justify-content: center;
+}
 
-  &_title {
-    margin-bottom: 10px;
-  }
+.SignIn_title {
+  margin-bottom: 10px;
+}
 
-  &_form {
-    display: flex;
-    width: 280px;
-    flex-direction: column;
+.SignIn_form {
+  display: flex;
+  width: 280px;
+  flex-direction: column;
+}
 
-    &__disabled {
-      opacity: 0.4;
-    }
+.SignIn_form__disabled {
+  opacity: 0.4;
+}
 
-    & > :not(*:last-child) {
-      margin-bottom: 15px;
-    }
-  }
+.SignIn_usernameContainer {
+  display: flex;
+  width: 100%;
+  align-items: center;
 
-  &_usernameContainer {
-    display: flex;
-    width: 100%;
-    align-items: center;
-  }
-
-  &_usernameContainer > *:first-child {
+  & > *:first-child {
     flex-grow: 1;
   }
+}
 
-  &_newButton {
-    padding: 7px;
-    margin-left: var(--space-sm);
-  }
+.SignIn_newButton {
+  padding: 7px;
+  margin-left: 5px;
+}
 
-  &_state {
-    margin-bottom: 15px;
+.SignIn_state {
+  margin-bottom: 15px;
+}
 
-    &__wrongPassword {
-      color: var(--c-danger);
-    }
-  }
-
-  &_version {
-    margin-top: var(--space-lg);
-    color: var(--c-gray-4);
-  }
+.SignIn_state__wrongPassword {
+  color: red;
 }

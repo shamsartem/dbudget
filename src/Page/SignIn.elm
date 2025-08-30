@@ -1,6 +1,9 @@
 module Page.SignIn exposing
-    ( Model
+    ( DirtyRecord
+    , Field
+    , Model
     , Msg(..)
+    , SignInState
     , getStore
     , init
     , setStore
@@ -9,18 +12,12 @@ module Page.SignIn exposing
     , view
     )
 
-import Browser.Navigation as Nav
-import Html exposing (..)
+import Html exposing (Attribute, Html, button, div, form, h1, text)
 import Html.Attributes exposing (class, classList, disabled, novalidate, type_)
 import Html.Events exposing (onClick, onSubmit)
-import Json.Decode
-import Port
 import Prng.Uuid
 import Regex
 import Store exposing (Store, getNewUuid)
-import Time
-import Transaction
-import Url
 import Validate exposing (Validator, ifBlank, validate)
 import View.Input as Input
 import View.Loader as Loader
@@ -37,7 +34,6 @@ type alias DirtyRecord =
 type SignInState
     = SignInNotAttempted
     | SignedInAndLoading
-    | WrongPassword
 
 
 type alias Model =
@@ -86,6 +82,7 @@ type Field
 ifNotUuid : (subject -> String) -> error -> Validator error subject
 ifNotUuid subjectToString error =
     let
+        getErrors : subject -> List error
         getErrors subject =
             case subject |> subjectToString |> Prng.Uuid.fromString of
                 Just _ ->
@@ -113,6 +110,7 @@ isValidUrl url =
 ifInvalidUrl : (subject -> String) -> error -> Validator error subject
 ifInvalidUrl subjectToUrl error =
     let
+        getErrors : subject -> List error
         getErrors subject =
             if subject |> subjectToUrl |> isValidUrl then
                 []
@@ -170,6 +168,7 @@ init store =
 view : Model -> Html Msg
 view model =
     let
+        validity : Result (List ( Field, String )) (Validate.Valid Model)
         validity =
             validateModel model
 
@@ -185,6 +184,7 @@ view model =
                         |> List.head
                         |> Maybe.map (\( _, err ) -> err)
 
+        getBlurHandler : Field -> Maybe Msg
         getBlurHandler field =
             case model.signInState of
                 SignedInAndLoading ->
@@ -193,6 +193,7 @@ view model =
                 _ ->
                     Just (BluredFromField field)
 
+        isDisabled : Bool
         isDisabled =
             case model.signInState of
                 SignedInAndLoading ->
@@ -209,9 +210,6 @@ view model =
 
             SignedInAndLoading ->
                 div [ c "state" ] [ Loader.view "Loading..." ]
-
-            WrongPassword ->
-                div [ c "state", c "state__wrongPassword" ] [ text "Wrong password" ]
         , form
             [ c "form"
             , classList [ ( cl "form__disabled", isDisabled ) ]
@@ -285,7 +283,6 @@ view model =
                 }
             , button [ class "button", disabled isDisabled ] [ text "Sign in" ]
             ]
-        , div [ c "version" ] [ text "Version 0.0.10" ]
         ]
 
 
@@ -296,7 +293,6 @@ type Msg
     | ServerInput String
     | BluredFromField Field
     | SignIn
-    | RecievedMessage Port.Message
     | NewUsernameRequested
 
 
@@ -341,15 +337,7 @@ update msg model =
                             , server = model.server
                         }
                   }
-                , Port.send
-                    (Port.SignedIn
-                        { username =
-                            model.username
-                        , deviceName = model.deviceName
-                        , password = model.password
-                        , server = model.server
-                        }
-                    )
+                , Cmd.none
                 )
 
             else
@@ -363,50 +351,6 @@ update msg model =
                   }
                 , Cmd.none
                 )
-
-        RecievedMessage { tag, payload } ->
-            case tag of
-                "SignInSuccess" ->
-                    case
-                        Json.Decode.decodeValue
-                            (Json.Decode.list
-                                (Json.Decode.array Json.Decode.string)
-                            )
-                            payload
-                    of
-                        Ok listOfRows ->
-                            let
-                                { transactions, newUuidSeed, invalidTransactionData } =
-                                    Transaction.listOfRowsToTransactions
-                                        store.uuidSeed
-                                        (Time.millisToPosix 0)
-                                        listOfRows
-                            in
-                            ( setStore
-                                { store
-                                    | signedInData =
-                                        Just
-                                            { transactions = transactions
-                                            , invalidTransactionData = invalidTransactionData
-                                            }
-                                    , uuidSeed = newUuidSeed
-                                }
-                                model
-                            , Nav.pushUrl store.navKey (Url.toString store.url)
-                            )
-
-                        Err _ ->
-                            -- TODO: solve error
-                            ( model, Cmd.none )
-
-                "WrongPassword" ->
-                    ( { model | signInState = WrongPassword }
-                    , Cmd.none
-                    )
-
-                _ ->
-                    -- ignore unknown message from js
-                    ( model, Cmd.none )
 
         BluredFromField field ->
             case field of
@@ -427,6 +371,7 @@ update msg model =
                 ( newStore, newUuid ) =
                     getNewUuid store
 
+                newModel : Model
                 newModel =
                     setStore newStore model
             in
@@ -437,4 +382,4 @@ update msg model =
 
 subscriptions : Sub Msg
 subscriptions =
-    Port.gotMessage RecievedMessage
+    Sub.none

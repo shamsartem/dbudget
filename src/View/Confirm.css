@@ -4,71 +4,40 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  animation: appear 0.3s ease-in-out forwards;
-  background-color: var(--c-gray-1-8);
   text-align: center;
+}
 
-  &_closeButton {
-    position: absolute;
-    z-index: var(--z-default);
-    top: 10px;
-    right: 10px;
-    display: flex;
-    width: 40px;
-    height: 40px;
-    align-items: center;
-    justify-content: center;
-    border-radius: 50%;
-    filter: drop-shadow(0 0 2px var(--c-gray-1));
+.Confirm_container {
+  display: flex;
+  overflow: auto;
+  width: 100%;
+  max-width: var(--max-page-width);
+  max-height: 100%;
+  flex-direction: column;
+  align-items: center;
+  padding: 20px;
+  border: 1px solid #000;
+  background-color: #fff;
+}
 
-    &::before,
-    &::after {
-      position: absolute;
-      width: 60%;
-      height: 3px;
-      background-color: var(--c-gray-7);
-      content: "";
-      transform: rotate(45deg);
-    }
+.Confirm_title {
+  margin-bottom: 15px;
+  font-weight: var(--fw-bold);
+}
 
-    &::after {
-      transform: rotate(-45deg);
-    }
-  }
+.Confirm_body {
+  padding: 20px;
+  line-height: 1.5;
+  text-align: left;
+  white-space: pre-wrap;
+}
 
-  &_container {
-    display: flex;
-    overflow: auto;
-    width: 100%;
-    max-width: var(--max-page-width);
-    max-height: 100%;
-    flex-direction: column;
-    align-items: center;
-    padding: var(--space-lg);
-    border: 1px solid var(--c-gray-5);
-    background-color: var(--c-gray-1);
-    border-radius: var(--bdrs-md);
-  }
+.Confirm_button {
+  width: 100%;
+}
 
-  &_title {
-    margin-bottom: 15px;
-    font-weight: var(--fw-bold);
-  }
-
-  &_body {
-    padding: var(--space-lg);
-    line-height: 1.5;
-    text-align: left;
-    white-space: pre-wrap;
-  }
-
-  &_button {
-    width: 100%;
-  }
-
-  &_buttons {
-    display: flex;
-    width: 100%;
-    gap: 10px;
-  }
+.Confirm_buttons {
+  display: flex;
+  width: 100%;
+  gap: 10px;
 }

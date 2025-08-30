@@ -3,20 +3,20 @@
   flex-grow: 1;
   align-items: center;
   overflow-y: scroll;
+}
 
-  &_container {
-    display: flex;
-    flex-direction: column;
-    flex-grow: 1;
-    align-items: center;
-    justify-content: center;
-  }
+.CSV_container {
+  display: flex;
+  flex-direction: column;
+  flex-grow: 1;
+  align-items: center;
+  justify-content: center;
+}
 
-  &_error {
-    white-space: pre;
-  }
+.CSV_error {
+  white-space: pre;
+}
 
-  &_exportButton {
-    margin-top: 20px;
-  }
+.CSV_exportButton {
+  margin-top: 20px;
 }

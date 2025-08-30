@@ -1,35 +1,27 @@
-module Main exposing (Model, main)
+module Main exposing (Model, Msg, main)
 
 import Browser exposing (Document)
-import Browser.Events exposing (onResize)
 import Browser.Navigation as Nav
-import Html exposing (..)
+import Dict
+import Html exposing (text)
+import InteropDefinitions
+import InteropPorts
 import Json.Decode
 import Page.CSV as CSV
+import Page.Landing as Landing
 import Page.NotFound as NotFound
-import Page.SignIn as SignIn
 import Page.Stats as Stats
 import Page.TransactionList as TransactionList
-import Port
+import Page.TransactionPage as TransactionPage
 import Prng.Uuid
 import Process
-import Route exposing (Route(..))
+import Route exposing (Route)
 import Store exposing (Store)
 import Task
-import Time
 import Transaction
 import Url exposing (Url)
 import Uuid exposing (UuidSeed)
-import View.Confirm as Confirm
 import View.Toasts as Toasts
-
-
-type alias Flags =
-    { seedAndExtension : Uuid.SeedAndExtension
-    , deviceName : String
-    , server : String
-    , windowWidth : Int
-    }
 
 
 
@@ -38,77 +30,78 @@ type alias Flags =
 
 type Model
     = NotFound Store
-    | SignIn SignIn.Model
+    | Landing Landing.Model
     | TransactionList TransactionList.Model
+    | TransactionPage TransactionPage.Model
     | CSV CSV.Model
     | Stats Stats.Model
 
 
-initialModel : Maybe UuidSeed -> Flags -> Url -> Nav.Key -> ( Model, Cmd Msg )
-initialModel maybeSeed { seedAndExtension, deviceName, server, windowWidth } url key =
-    let
-        store : Store
-        store =
-            { navKey = key
-            , url = url
-            , uuidSeed =
-                Maybe.withDefault
-                    (Uuid.init seedAndExtension)
-                    maybeSeed
-            , signedInData = Nothing
-            , deviceName = deviceName
-            , server = server
-            , windowWidth = windowWidth
-            , isRefreshWindowVisible = False
-            , isOfflineReadyWindowVisible = False
-            , toasts = []
-            }
-    in
-    case Route.fromUrl url of
-        Nothing ->
-            ( NotFound store, Cmd.none )
-
-        Just Route.SignOut ->
-            let
-                ( signInModel, signInCommand ) =
-                    SignIn.init store
-            in
-            ( SignIn signInModel
-            , Cmd.batch
-                [ Cmd.map GotSignInMsg signInCommand
-                , Route.pushUrl
-                    store.navKey
-                    Route.TransactionList
-                ]
-            )
-
-        Just _ ->
-            let
-                ( signInModel, signInCommand ) =
-                    SignIn.init store
-            in
-            ( SignIn signInModel
-            , Cmd.map GotSignInMsg signInCommand
-            )
+initialModel : { uuidSeed : UuidSeed, server : String, deviceName : String, transactions : Transaction.ValidatedTransactions, invalidTransactionData: List Transaction.Transaction } -> Url -> Nav.Key -> ( Model, Cmd Msg )
+initialModel { uuidSeed, server, deviceName, invalidTransactionData, transactions } url key =
+    changeRouteTo (Route.fromUrl url)
+        { navKey = key
+        , url = url
+        , uuidSeed = uuidSeed
+        , server = server
+        , deviceName = deviceName
+        , transactions = transactions
+        , invalidTransactionData = invalidTransactionData
+        , toasts = []
+        }
 
 
-init : Flags -> Url -> Nav.Key -> ( Model, Cmd Msg )
+init : Json.Decode.Value -> Url -> Nav.Key -> ( Model, Cmd Msg )
 init flags url key =
-    initialModel Nothing flags url key
+    case InteropPorts.decodeFlags flags of
+        Err flagsError ->
+            let
+                ( m, c ) =
+                    initialModel
+                        { uuidSeed = Uuid.init ( 0, [ 0, 0, 0, 0 ] )
+                        , server = ""
+                        , deviceName = ""
+                        , transactions = Transaction.emptyTransactions
+                        , invalidTransactionData = []
+                        }
+                        url
+                        key
+
+                ( nm, newC ) =
+                    showToast m (Json.Decode.errorToString flagsError)
+            in
+            ( nm, Cmd.batch [ c, newC ] )
+
+        Ok { seedAndExtension, server, deviceName } ->
+            let
+                uuidSeed = Uuid.init seedAndExtension
+            in
+            initialModel
+                { uuidSeed = uuidSeed
+                , server = server
+                , deviceName = deviceName
+                , transactions =  Transaction.emptyTransactions
+                , invalidTransactionData = []
+                }
+                url
+                key
 
 
-getTitle : Model -> String
-getTitle model =
+getPageTitle : Model -> String
+getPageTitle model =
     let
         getFullTitle title =
             title ++ " - dbudget"
     in
     case model of
-        TransactionList m ->
-            getFullTitle (TransactionList.getTitle m)
+        Landing _ ->
+            getFullTitle "Landing"
 
-        SignIn _ ->
-            getFullTitle "Sign in"
+        TransactionList _ ->
+            getFullTitle "Transactions"
+
+        TransactionPage m ->
+            getFullTitle (TransactionPage.getTitle m)
 
         CSV _ ->
             getFullTitle "CSV"
@@ -123,43 +116,13 @@ getTitle model =
 view : Model -> Document Msg
 view model =
     let
-        { isOfflineReadyWindowVisible, isRefreshWindowVisible, toasts } =
+        { toasts } =
             getStore model
 
         viewPage toMsg content =
-            { title = getTitle model
+            { title = getPageTitle model
             , body =
                 [ Html.map toMsg content
-                , if isOfflineReadyWindowVisible then
-                    Confirm.view
-                        { title = "App is ready to work offline"
-                        , maybeBody = Nothing
-                        , cancelButton =
-                            { title = "Ok"
-                            , handleClick = OkOfflineReadyClicked
-                            }
-                        , okButton = Nothing
-                        }
-
-                  else
-                    text ""
-                , if isRefreshWindowVisible then
-                    Confirm.view
-                        { title = "There is new app version. Update?"
-                        , maybeBody = Nothing
-                        , cancelButton =
-                            { title = "No"
-                            , handleClick = CancelRefreshClicked
-                            }
-                        , okButton =
-                            Just
-                                { title = "Yes"
-                                , handleClick = RefreshClicked
-                                }
-                        }
-
-                  else
-                    text ""
                 , if List.length toasts /= 0 then
                     Toasts.view toasts
 
@@ -170,15 +133,16 @@ view model =
     in
     case model of
         NotFound _ ->
-            { title = getTitle model
-            , body = [ NotFound.view ]
-            }
+            viewPage (\_ -> GotNotFoundMsg) NotFound.view
 
-        SignIn signInModel ->
-            viewPage GotSignInMsg (SignIn.view signInModel)
+        Landing landingModel ->
+            viewPage (\_ -> GotLandingMsg) (Landing.view landingModel)
 
         TransactionList transactionListModel ->
             viewPage GotTransactionListMsg (TransactionList.view transactionListModel)
+
+        TransactionPage transactionPageModel ->
+            viewPage GotTransactionPageMsg (TransactionPage.view transactionPageModel)
 
         CSV csvModel ->
             viewPage GotCSVMsg (CSV.view csvModel)
@@ -190,15 +154,13 @@ view model =
 type Msg
     = ClickedLink Browser.UrlRequest
     | ChangedUrl Url
-    | GotSignInMsg SignIn.Msg
+    | GotLandingMsg
     | GotTransactionListMsg TransactionList.Msg
+    | GotTransactionPageMsg TransactionPage.Msg
     | GotCSVMsg CSV.Msg
     | GotStatsMsg Stats.Msg
-    | GotNewWindowWidth Int
-    | RecievedMessage Port.Message
-    | OkOfflineReadyClicked
-    | RefreshClicked
-    | CancelRefreshClicked
+    | GotNotFoundMsg
+    | GotPortMsg (Result Json.Decode.Error InteropDefinitions.ToElm)
     | RemoveToast
 
 
@@ -208,11 +170,14 @@ getStore model =
         NotFound store ->
             store
 
-        SignIn signInModel ->
-            SignIn.getStore signInModel
+        Landing landingModel ->
+            Landing.getStore landingModel
 
         TransactionList transactionListModel ->
             TransactionList.getStore transactionListModel
+
+        TransactionPage transactionPageModel ->
+            TransactionPage.getStore transactionPageModel
 
         CSV csvModel ->
             CSV.getStore csvModel
@@ -227,11 +192,14 @@ setStore store model =
         NotFound _ ->
             NotFound store
 
-        SignIn signInModel ->
-            SignIn (SignIn.setStore store signInModel)
+        Landing landingModel ->
+            Landing (Landing.setStore store landingModel)
 
         TransactionList transactionListModel ->
             TransactionList (TransactionList.setStore store transactionListModel)
+
+        TransactionPage transactionPageModel ->
+            TransactionPage (TransactionPage.setStore store transactionPageModel)
 
         CSV csvModel ->
             CSV (CSV.setStore store csvModel)
@@ -242,89 +210,65 @@ setStore store model =
 
 changeRouteTo : Maybe Route -> Store -> ( Model, Cmd Msg )
 changeRouteTo maybeRoute store =
-    case store.signedInData of
+    case maybeRoute of
         Nothing ->
-            SignIn.init store
-                |> updatePageWith SignIn GotSignInMsg
+            ( NotFound store, Cmd.none )
 
-        Just signedInData ->
-            case maybeRoute of
+        Just Route.Landing ->
+            Landing.init
+                store
+                |> updatePageWith Landing (\_ -> GotLandingMsg)
+
+        Just Route.TransactionList ->
+            TransactionList.init
+                store
+                |> updatePageWith TransactionList GotTransactionListMsg
+
+        Just Route.TransactionNew ->
+            TransactionPage.init
+                TransactionPage.New
+                store
+                |> updatePageWith TransactionPage GotTransactionPageMsg
+
+        Just (Route.Transaction id) ->
+            let
+                transactionsDict : Transaction.TransactionsDict
+                transactionsDict =
+                    Transaction.getTransactionsDict store.transactions
+            in
+            case Dict.get (Prng.Uuid.toString id) transactionsDict of
                 Nothing ->
                     ( NotFound store, Cmd.none )
 
-                Just Route.TransactionList ->
-                    TransactionList.init
-                        TransactionList.NoDialog
+                Just transaction ->
+                    TransactionPage.init
+                        (TransactionPage.Edit
+                            (Transaction.getTransactionData transaction)
+                        )
                         store
-                        signedInData
-                        |> updatePageWith TransactionList GotTransactionListMsg
+                        |> updatePageWith TransactionPage GotTransactionPageMsg
 
-                Just Route.TransactionNew ->
-                    TransactionList.init
-                        TransactionList.New
-                        store
-                        signedInData
-                        |> updatePageWith TransactionList GotTransactionListMsg
+        Just Route.Stats ->
+            Stats.init store
+                |> updatePageWith Stats GotStatsMsg
 
-                Just (Route.Transaction id) ->
-                    TransactionList.init
-                        (TransactionList.Edit (Prng.Uuid.toString id))
-                        store
-                        signedInData
-                        |> updatePageWith TransactionList GotTransactionListMsg
-
-                Just Route.Stats ->
-                    Stats.init store signedInData
-                        |> updatePageWith Stats GotStatsMsg
-
-                Just Route.CSV ->
-                    CSV.init store signedInData
-                        |> updatePageWith CSV GotCSVMsg
-
-                Just Route.SignOut ->
-                    let
-                        ( m, cmd ) =
-                            initialModel
-                                (Just store.uuidSeed)
-                                { -- seed and extension  ( 0, [ 0 ] ) is not
-                                  -- actually used because of the Just above
-                                  -- but it is needed to typecheck
-                                  seedAndExtension = ( 0, [ 0 ] )
-                                , deviceName = store.deviceName
-                                , server = store.server
-                                , windowWidth = store.windowWidth
-                                }
-                                store.url
-                                store.navKey
-                    in
-                    ( m
-                    , Cmd.batch
-                        [ cmd
-                        , Route.pushUrl
-                            store.navKey
-                            Route.TransactionList
-                        , Port.send Port.SignedOut
-                        ]
-                    )
+        Just Route.CSV ->
+            CSV.init store
+                |> updatePageWith CSV GotCSVMsg
 
 
 updatePageWith : (subModel -> Model) -> (subMsg -> Msg) -> ( subModel, Cmd subMsg ) -> ( Model, Cmd Msg )
 updatePageWith toModel toMsg ( subModel, subCmd ) =
-    ( toModel subModel
-    , Cmd.map toMsg subCmd
-    )
+    ( toModel subModel, Cmd.map toMsg subCmd )
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update message model =
     let
         store =
-            model |> getStore
+            getStore model
     in
     case ( message, model ) of
-        ( GotNewWindowWidth width, _ ) ->
-            ( setStore { store | windowWidth = width } model, Cmd.none )
-
         ( ClickedLink urlRequest, _ ) ->
             case urlRequest of
                 Browser.Internal url ->
@@ -334,158 +278,75 @@ update message model =
                     ( model, Nav.load href )
 
         ( ChangedUrl url, _ ) ->
-            changeRouteTo
-                (Route.fromUrl url)
-                { store | url = url }
+            changeRouteTo (Route.fromUrl url) { store | url = url }
 
-        ( GotSignInMsg subMsg, SignIn signInModel ) ->
-            SignIn.update subMsg signInModel
-                |> updatePageWith SignIn GotSignInMsg
-
-        ( GotTransactionListMsg subMsg, TransactionList transactionListModel ) ->
-            TransactionList.update subMsg transactionListModel
-                |> updatePageWith TransactionList GotTransactionListMsg
-
-        ( GotCSVMsg subMsg, CSV csvModel ) ->
-            CSV.update subMsg csvModel
-                |> updatePageWith CSV GotCSVMsg
-
-        ( GotStatsMsg subMsg, Stats statsModel ) ->
-            Stats.update subMsg statsModel
-                |> updatePageWith Stats GotStatsMsg
-
-        ( RecievedMessage { tag, payload }, _ ) ->
-            case tag of
-                "NeedRefresh" ->
-                    ( setStore
-                        { store | isRefreshWindowVisible = True }
-                        model
-                    , Cmd.none
-                    )
-
-                "OfflineReady" ->
-                    ( setStore
-                        { store | isOfflineReadyWindowVisible = True }
-                        model
-                    , Cmd.none
-                    )
-
-                "ReceivedTransactions" ->
-                    case
-                        ( Json.Decode.decodeValue
-                            (Json.Decode.list
-                                (Json.Decode.array Json.Decode.string)
-                            )
-                            payload
-                        , store.signedInData
-                        )
-                    of
-                        ( Ok listOfRows, Just signedInData ) ->
-                            let
-                                { transactions, newUuidSeed } =
-                                    Transaction.listOfRowsToTransactions
-                                        store.uuidSeed
-                                        (Time.millisToPosix 0)
-                                        listOfRows
-
-                                mergedTransactions =
-                                    Transaction.mergeTransactions
-                                        signedInData.transactions
-                                        (Transaction.getTransactionsDict transactions)
-                            in
-                            ( setStore
-                                { store
-                                    | signedInData =
-                                        Just
-                                            { signedInData
-                                                | transactions = mergedTransactions
-                                            }
-                                    , uuidSeed = newUuidSeed
-                                }
-                                model
-                            , Cmd.batch
-                                [ case Route.fromUrl store.url of
-                                    Just (Route.Transaction _) ->
-                                        Cmd.none
-
-                                    _ ->
-                                        Nav.pushUrl store.navKey (Url.toString store.url)
-                                , Port.send
-                                    (Port.MergedReceivedTransactions
-                                        mergedTransactions
-                                    )
-                                ]
-                            )
-
-                        _ ->
-                            ( model, Cmd.none )
-
-                "Toast" ->
-                    case
-                        payload |> Json.Decode.decodeValue Json.Decode.string
-                    of
-                        Ok toast ->
-                            ( setStore
-                                { store | toasts = List.append store.toasts [ toast ] }
-                                model
-                            , Process.sleep 5000
-                                |> Task.perform (\_ -> RemoveToast)
-                            )
-
-                        Err _ ->
-                            -- js should always send string toast
-                            ( model, Cmd.none )
-
-                "GotHelloBack" ->
-                    case
-                        ( payload
-                            |> Json.Decode.decodeValue Json.Decode.string
-                        , store.signedInData
-                        )
-                    of
-                        ( Ok socketId, Just signedInData ) ->
-                            ( model
-                            , Port.send
-                                (Port.GotHelloBack
-                                    { socketId = socketId
-                                    , transactions = signedInData.transactions
-                                    }
-                                )
-                            )
-
-                        _ ->
-                            ( model, Cmd.none )
-
-                _ ->
-                    ( model, Cmd.none )
+        ( GotPortMsg portMessage, _ ) ->
+            handlePortMessage portMessage model
 
         ( RemoveToast, _ ) ->
             ( setStore { store | toasts = List.drop 1 store.toasts } model, Cmd.none )
 
-        ( OkOfflineReadyClicked, _ ) ->
-            ( setStore
-                { store | isOfflineReadyWindowVisible = False }
-                model
-            , Cmd.none
-            )
+        ( GotTransactionListMsg subMsg, TransactionList transactionListModel ) ->
+            TransactionList.update subMsg transactionListModel |> updatePageWith TransactionList GotTransactionListMsg
 
-        ( RefreshClicked, _ ) ->
-            ( setStore
-                { store | isRefreshWindowVisible = False }
-                model
-            , Port.send Port.RefreshApp
-            )
+        ( GotTransactionPageMsg subMsg, TransactionPage transactionPageModel ) ->
+            TransactionPage.update subMsg transactionPageModel |> updatePageWith TransactionPage GotTransactionPageMsg
 
-        ( CancelRefreshClicked, _ ) ->
-            ( setStore
-                { store | isRefreshWindowVisible = False }
-                model
-            , Cmd.none
-            )
+        ( GotCSVMsg subMsg, CSV csvModel ) ->
+            CSV.update subMsg csvModel |> updatePageWith CSV GotCSVMsg
 
-        ( _, _ ) ->
+        ( GotStatsMsg subMsg, Stats statsModel ) ->
+            Stats.update subMsg statsModel |> updatePageWith Stats GotStatsMsg
+
+        _ ->
             -- Disregard messages that arrived for the wrong page.
             ( model, Cmd.none )
+
+
+showToast : Model -> String -> ( Model, Cmd Msg )
+showToast model toast =
+    let
+        store =
+            getStore model
+    in
+    ( setStore
+        { store
+            | toasts =
+                List.append store.toasts
+                    [ toast ]
+        }
+        model
+    , Process.sleep 5000 |> Task.perform (\_ -> RemoveToast)
+    )
+
+
+handlePortMessage : Result Json.Decode.Error InteropDefinitions.ToElm -> Model -> ( Model, Cmd Msg )
+handlePortMessage result model =
+    case result of
+        Err err ->
+            showToast model (Json.Decode.errorToString err)
+
+        Ok (InteropDefinitions.Toast toast) ->
+            showToast model toast
+
+        Ok (InteropDefinitions.GotTransactions rawTransactions) ->
+            let
+                store =
+                    getStore model
+
+                { transactions, invalidTransactionData, newUuidSeed } =
+                    Transaction.notValidatedTransactionsToTransactions store.uuidSeed rawTransactions
+
+                newStore =
+                    { store
+                        | transactions = transactions
+                        , uuidSeed = newUuidSeed
+                        , invalidTransactionData =
+                            store.invalidTransactionData
+                                ++ invalidTransactionData
+                    }
+            in
+            ( setStore newStore model, Cmd.none )
 
 
 
@@ -500,11 +361,14 @@ subscriptions model =
                 NotFound _ ->
                     Sub.none
 
-                SignIn _ ->
-                    Sub.map GotSignInMsg SignIn.subscriptions
+                Landing m ->
+                    Sub.map (\_ -> GotLandingMsg) (Landing.subscriptions m)
 
                 TransactionList m ->
                     Sub.map GotTransactionListMsg (TransactionList.subscriptions m)
+
+                TransactionPage m ->
+                    Sub.map GotTransactionPageMsg (TransactionPage.subscriptions m)
 
                 CSV m ->
                     Sub.map GotCSVMsg (CSV.subscriptions m)
@@ -512,18 +376,14 @@ subscriptions model =
                 Stats m ->
                     Sub.map GotStatsMsg (Stats.subscriptions m)
     in
-    Sub.batch
-        [ pageSubscriptions
-        , onResize (\w _ -> GotNewWindowWidth w)
-        , Port.gotMessage RecievedMessage
-        ]
+    Sub.batch [ pageSubscriptions, InteropPorts.toElm |> Sub.map GotPortMsg ]
 
 
 
 -- MAIN
 
 
-main : Program Flags Model Msg
+main : Program Json.Decode.Value Model Msg
 main =
     Browser.application
         { init = init

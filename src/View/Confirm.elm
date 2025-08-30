@@ -1,8 +1,10 @@
-module View.Confirm exposing (Button, view)
+module View.Confirm exposing (Button, Config, focusCancelButton, view)
 
-import Html exposing (..)
-import Html.Attributes exposing (class, type_)
+import Browser.Dom exposing (focus)
+import Html exposing (Attribute, Html, button, div, h2, text)
+import Html.Attributes exposing (class, id, type_)
 import Html.Events exposing (onClick)
+import Task
 
 
 type alias Button msg =
@@ -34,16 +36,20 @@ c elementAndOrModifier =
     class (cl elementAndOrModifier)
 
 
+cancelButtonId : String
+cancelButtonId =
+    "confirmCancelButton"
+
+
+focusCancelButton : msg -> Cmd msg
+focusCancelButton msg =
+    Task.attempt (\_ -> msg) (focus cancelButtonId)
+
+
 view : Config msg -> Html msg
 view config =
     div [ class baseClass, class "fullSize" ]
-        [ button
-            [ c "closeButton"
-            , onClick config.cancelButton.handleClick
-            ]
-            [ span [ class "visuallyHidden" ] [ text "Close" ]
-            ]
-        , div [ c "container" ]
+        [ div [ c "container" ]
             [ h2 [ c "title" ] [ text config.title ]
             , case config.maybeBody of
                 Just body ->
@@ -57,6 +63,7 @@ view config =
                     , c "button"
                     , onClick config.cancelButton.handleClick
                     , type_ "button"
+                    , id cancelButtonId
                     ]
                     [ text config.cancelButton.title ]
                 , case config.okButton of

@@ -1,16 +1,15 @@
-module TransactionTests exposing (..)
+module TransactionTests exposing (suite)
 
 import Dict
 import Expect
-import Numeric.Decimal.Rounding exposing (RoundingAlgorythm(..))
 import Numeric.Nat as Nat
 import Prng.Uuid
-import Test exposing (..)
+import Test exposing (Test, describe, test)
 import Time
 import Transaction
 
 
-maybeDefaultTransactionValue : Result Transaction.ParseError Transaction.Data
+maybeDefaultTransactionValue : Result Transaction.ParseError Transaction
 maybeDefaultTransactionValue =
     Prng.Uuid.fromString "5d0c4002-5cd4-4859-808d-d5086e4c04c8"
         |> Result.fromMaybe Transaction.NotAllowedSymbolError

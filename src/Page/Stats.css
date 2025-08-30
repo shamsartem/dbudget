@@ -3,47 +3,47 @@
   display: flex;
   flex-grow: 1;
   align-items: center;
+}
 
-  &_pageWrapper {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    overflow-y: scroll;
-  }
+.Stats_pageWrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  overflow-y: scroll;
+}
 
-  &_container {
-    display: flex;
-    width: 100%;
-    max-width: var(--max-page-width);
-    flex-direction: column;
+.Stats_container {
+  display: flex;
+  width: 100%;
+  max-width: var(--max-page-width);
+  flex-direction: column;
+  flex-grow: 1;
+  padding: 20px;
+}
+
+.Stats_checkboxContainer {
+  margin-bottom: 20px;
+}
+
+.Stats_inputContainer {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 20px;
+  gap: 20px;
+
+  & > * {
     flex-grow: 1;
-    padding: 20px;
   }
+}
 
-  &_checkboxContainer {
-    margin-bottom: 20px;
-  }
+.Stats_chartContainer {
+  display: flex;
+  flex-direction: column;
+  flex-grow: 1;
+  gap: 10px;
+}
 
-  &_inputContainer {
-    display: flex;
-    justify-content: center;
-    margin-bottom: 20px;
-    gap: 20px;
-
-    & > * {
-      flex-grow: 1;
-    }
-  }
-
-  &_chartContainer {
-    display: flex;
-    flex-direction: column;
-    flex-grow: 1;
-    gap: 10px;
-  }
-
-  &_total {
-    font-size: 18px;
-    font-weight: 700;
-  }
+.Stats_total {
+  font-size: 18px;
+  font-weight: 700;
 }

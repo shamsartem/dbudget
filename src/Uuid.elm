@@ -1,4 +1,4 @@
-module Uuid exposing (SeedAndExtension, UuidSeed, getNewUuid, init)
+module Uuid exposing (SeedAndExtension, UuidSeed, init, new)
 
 import Prng.Uuid exposing (Uuid)
 import Random.Pcg.Extended exposing (Seed, initialSeed, step)
@@ -12,21 +12,27 @@ type alias SeedAndExtension =
     ( Int, List Int )
 
 
+
+{-
+   `SeedAndExtension` is a source of randomness and must be provided from js side in form of a flag
+-}
+
+
 init : SeedAndExtension -> UuidSeed
-init seedandextension =
-    let
-        ( seed, seedextension ) =
-            seedandextension
-    in
+init ( seed, seedextension ) =
     UuidSeed (initialSeed seed seedextension)
 
 
-getNewUuid : UuidSeed -> ( Uuid, UuidSeed )
-getNewUuid (UuidSeed seed) =
+
+{-
+   You must always store the new `UuidSeed` and use it to generate the next Uuid.
+-}
+
+
+new : UuidSeed -> ( Uuid, UuidSeed )
+new (UuidSeed seed) =
     let
-        ( newuuid, newseed ) =
+        ( newUuid, newSeed ) =
             step Prng.Uuid.generator seed
     in
-    ( newuuid
-    , UuidSeed newseed
-    )
+    ( newUuid, UuidSeed newSeed )

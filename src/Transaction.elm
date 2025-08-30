@@ -1,53 +1,50 @@
 module Transaction exposing
-    ( AccountsDict
-    , Data
-    , DecimalsDict
+    ( CurrencyDecimalsDict
     , Field(..)
-    , ParseError(..)
+    , ParseSumError(..)
     , Transaction
-    , Transactions
+    , TransactionDataNotValidated
+    , TransactionNew
+    , TransactionUpdate
+    , TransactionWithId(..)
+    , ValidatedTransactions
+    , TransactionsDict
+    , ValidTransaction
+    , createTransaction
     , csvHeaders
     , emptyTransactions
-    , getAccountsDict
     , getDecimalsDict
-    , getDefaultTransactionValue
     , getFullPrice
-    , getPrice
     , getNewTransactionTemplate
-    , getNotDeletedTransactionDataList
-    , getTransaction
+    , getPrice
+    , getTransactionById
     , getTransactionData
-    , getTransactions
     , getTransactionsDict
-    , insertTransaction
     , listOfRowsToTransactions
     , mergeTransactions
+    , notValidatedTransactionsToTransactions
+    , deleteTransaction
     , stringToDecimal
-    , toJsonValue
     , toListOfListsOfStrings
+    , transactionToValidTransaction
+    , transactionsToList
+    , updateTransaction
     , validateTransactionData
     )
 
 import Array exposing (Array)
 import Dict exposing (Dict)
+import Html.Attributes exposing (id)
 import Iso8601
-import Json.Encode
 import Numeric.ArithmeticError as ArithmeticError exposing (ArithmeticError)
 import Numeric.Decimal as Decimal exposing (Decimal)
 import Numeric.Decimal.Rounding exposing (RoundingAlgorythm(..))
 import Numeric.Nat as Nat exposing (Nat)
 import Prng.Uuid exposing (Uuid)
 import Regex
-import Route exposing (Route(..))
 import Time exposing (Posix)
 import Uuid exposing (UuidSeed)
-import Validate
-    exposing
-        ( Validator
-        , fromValid
-        , ifBlank
-        , validate
-        )
+import Validate exposing (Validator, fromValid, ifBlank, validate)
 
 
 
@@ -83,24 +80,30 @@ stringToBool string =
         [ "true", "True", "TRUE", "1" ]
 
 
-type ParseError
+type ParseSumError
     = ArithmeticParseError ArithmeticError
     | NotAllowedSymbolError
     | InvalidNumberError
     | SignWithoutANumberError
 
 
-parseSum : String -> Nat -> Result ParseError (List (Decimal Int Int))
-parseSum string numberOfDecimalsFromDB =
-    let
-        allowedSymbols =
-            Maybe.withDefault Regex.never <|
-                Regex.fromString "^[0-9+-., ]*$"
+regexFromHardcodedString : String -> Regex.Regex
+regexFromHardcodedString s =
+    s |> Regex.fromString |> Maybe.withDefault Regex.never
 
-        validNumber =
-            Maybe.withDefault Regex.never <|
-                Regex.fromString "^(-|\\+)?(((0|([1-9][0-9]*))[.,][0-9]+)|([1-9][0-9]*))$"
-    in
+
+allowedSymbols : Regex.Regex
+allowedSymbols =
+    "^[0-9+-., ]*$" |> regexFromHardcodedString
+
+
+validNumber : Regex.Regex
+validNumber =
+    "^(-|\\+)?(((0|([1-9][0-9]*))[.,][0-9]+)|([1-9][0-9]*))$" |> regexFromHardcodedString
+
+
+parseSum : String -> Nat -> Result ParseSumError (List (Decimal Int Int))
+parseSum string numberOfDecimalsFromDB =
     if string == "" then
         Ok []
 
@@ -178,7 +181,7 @@ parseSum string numberOfDecimalsFromDB =
             numberStrings
 
 
-stringToDecimal : String -> Nat -> Int -> Result ParseError (Decimal Int Int)
+stringToDecimal : String -> Nat -> Int -> Result ParseSumError (Decimal Int Int)
 stringToDecimal string numberOfDecimalsFromDB ifEmptyValue =
     Result.andThen
         (\list ->
@@ -216,7 +219,7 @@ stringToDecimal string numberOfDecimalsFromDB ifEmptyValue =
 -- TRANSACTION
 
 
-type alias Data =
+type alias Transaction =
     { isIncome : Bool
     , date : String
     , category : String
@@ -226,23 +229,25 @@ type alias Data =
     , description : String
     , currency : String
     , account : String
-    , id : Uuid
     , lastUpdated : Posix
-    , isDeleted : Bool
     }
 
 
-type Transaction
-    = Transaction Data
+type TransactionWithId
+    = TransactionWithId Uuid Transaction
 
 
-getTransactionData : Transaction -> Data
-getTransactionData (Transaction transactionData) =
-    transactionData
+type ValidTransaction
+    = ValidTransaction Uuid Transaction
 
 
-getDefaultTransactionValue : Uuid -> Data
-getDefaultTransactionValue id =
+getTransactionData : ValidTransaction -> TransactionWithId
+getTransactionData (ValidTransaction id transaction) =
+    TransactionWithId id transaction
+
+
+emptyTransaction : Transaction
+emptyTransaction =
     { isIncome = False
     , date = ""
     , category = ""
@@ -252,9 +257,7 @@ getDefaultTransactionValue id =
     , description = ""
     , currency = ""
     , account = ""
-    , id = id
     , lastUpdated = Time.millisToPosix 0
-    , isDeleted = False
     }
 
 
@@ -262,38 +265,40 @@ getDefaultTransactionValue id =
 -- VALIDATE
 
 
+displayParserError : ParseSumError -> String -> String
+displayParserError error fieldName =
+    case error of
+        InvalidNumberError ->
+            "One of the numbers is invalid in the " ++ fieldName ++ " field"
+
+        SignWithoutANumberError ->
+            "There is + or - sign without corresponding number in the " ++ fieldName ++ " field"
+
+        NotAllowedSymbolError ->
+            "Only numbers, \"+\" and \"-\" signs can be used for " ++ fieldName ++ " field"
+
+        ArithmeticParseError e ->
+            case e of
+                ArithmeticError.Overflow ->
+                    "Number is too large or has too many decimal points in the " ++ fieldName ++ " field"
+
+                ArithmeticError.Underflow ->
+                    "Number is too large or has too many decimal points in the " ++ fieldName ++ " field"
+
+                ArithmeticError.DivisionByZero ->
+                    "Number has division by zero in the " ++ fieldName ++ " field"
+
+                ArithmeticError.ParsingProblem problem ->
+                    "Some number ( " ++ problem ++ " ) is invalid in the " ++ fieldName ++ " field"
+
+
 ifInvalidSum : (subject -> String) -> ( Field, String ) -> Validator ( Field, String ) subject
 ifInvalidSum subjectToString ( field, fieldName ) =
-    let
-        getErrors subject =
+    Validate.fromErrors
+        (\subject ->
             case stringToDecimal (subjectToString subject) Nat.nat0 1 of
                 Err err ->
-                    [ ( field
-                      , case err of
-                            InvalidNumberError ->
-                                "One of the numbers is invalid in the " ++ fieldName ++ " field"
-
-                            SignWithoutANumberError ->
-                                "There is + or - sign without corresponding number in the " ++ fieldName ++ " field"
-
-                            NotAllowedSymbolError ->
-                                "Only numbers, \"+\" and \"-\" signs can be used for " ++ fieldName ++ " field"
-
-                            ArithmeticParseError e ->
-                                case e of
-                                    ArithmeticError.Overflow ->
-                                        "Number is too large or has too many decimal points in the " ++ fieldName ++ " field"
-
-                                    ArithmeticError.Underflow ->
-                                        "Number is too large or has too many decimal points in the " ++ fieldName ++ " field"
-
-                                    ArithmeticError.DivisionByZero ->
-                                        "Number has division by zero in the " ++ fieldName ++ " field"
-
-                                    ArithmeticError.ParsingProblem problem ->
-                                        "Some number ( " ++ problem ++ " ) is invalid in the " ++ fieldName ++ " field"
-                      )
-                    ]
+                    [ ( field, displayParserError err fieldName ) ]
 
                 Ok value ->
                     if Decimal.toFloat value > 0 then
@@ -301,8 +306,7 @@ ifInvalidSum subjectToString ( field, fieldName ) =
 
                     else
                         [ ( field, fieldName ++ " must be positive" ) ]
-    in
-    Validate.fromErrors getErrors
+        )
 
 
 ifInvalidDate : (subject -> String) -> error -> Validator error subject
@@ -319,32 +323,7 @@ ifInvalidDate subjectToDate error =
     Validate.fromErrors getErrors
 
 
-ifInvalidCurrency : AccountsDict -> Validator ( Field, String ) Data
-ifInvalidCurrency accountsDict =
-    let
-        getErrors { currency, account } =
-            case Dict.get account accountsDict of
-                Nothing ->
-                    []
-
-                Just currencyFromDict ->
-                    if currencyFromDict == currency then
-                        []
-
-                    else
-                        [ ( Currency
-                          , "All transactions for account \""
-                                ++ account
-                                ++ "\" must use the same \""
-                                ++ currencyFromDict
-                                ++ "\" currency"
-                          )
-                        ]
-    in
-    Validate.fromErrors getErrors
-
-
-ifInvalidFullPrice : DecimalsDict -> error -> Validator error Data
+ifInvalidFullPrice : CurrencyDecimalsDict -> error -> Validator error Transaction
 ifInvalidFullPrice decimalsDict error =
     let
         getErrors transactionData =
@@ -364,17 +343,17 @@ ifInvalidFullPrice decimalsDict error =
     Validate.fromErrors getErrors
 
 
-getTransaction : Transactions -> Data -> Maybe Transaction
-getTransaction transactions transactionData =
-    case validateTransactionData transactions transactionData of
-        Ok transaction ->
-            Just (Transaction (fromValid transaction))
+transactionToValidTransaction : ValidatedTransactions -> TransactionWithId -> Maybe ValidTransaction
+transactionToValidTransaction transactions (TransactionWithId id transaction) =
+    case validateTransactionData transactions transaction of
+        Ok validTransaction ->
+            Just (ValidTransaction id (fromValid validTransaction))
 
         Err _ ->
             Nothing
 
 
-priceAndAmountValidator : Validator ( Field, String ) Data
+priceAndAmountValidator : Validator ( Field, String ) Transaction
 priceAndAmountValidator =
     Validate.all
         [ Validate.firstError
@@ -385,15 +364,8 @@ priceAndAmountValidator =
         ]
 
 
-transactionValidator : Transactions -> Validator ( Field, String ) Data
+transactionValidator : ValidatedTransactions -> Validator ( Field, String ) Transaction
 transactionValidator transactions =
-    let
-        decimalsDict =
-            getDecimalsDict transactions
-
-        accountsDict =
-            getAccountsDict transactions
-    in
     Validate.all
         [ Validate.firstError
             [ ifBlank .date ( Date, "Date is missing" )
@@ -404,173 +376,170 @@ transactionValidator transactions =
         , priceAndAmountValidator
         , Validate.firstError
             [ ifBlank .currency ( Currency, "Currency is missing" )
-            , ifInvalidCurrency accountsDict
             ]
-        , ifInvalidFullPrice decimalsDict ( FullPrice, "Price or amount is too large or has too many decimal points" )
+        , ifInvalidFullPrice (getDecimalsDict transactions) ( FullPrice, "Price or amount is too large or has too many decimal points" )
         ]
 
 
 validateTransactionData :
-    Transactions
-    -> Data
-    -> Result (List ( Field, String )) (Validate.Valid Data)
+    ValidatedTransactions
+    -> Transaction
+    -> Result (List ( Field, String )) (Validate.Valid Transaction)
 validateTransactionData transactions transactionData =
-    if transactionData.isDeleted then
-        validate (Validate.all []) transactionData
-
-    else
-        validate (transactionValidator transactions) transactionData
+    validate (transactionValidator transactions) transactionData
 
 
 
 -- TRANSACTIONS
 
 
-type alias DecimalsDict =
+type alias CurrencyDecimalsDict =
     Dict String Nat
 
 
-type alias AccountsDict =
-    Dict String String
-
-
-type alias TransactionsDict =
-    Dict String Transaction
-
-
-type alias TransactionsData =
-    { transactionsDict : TransactionsDict
-    , decimalsDict : DecimalsDict
-    , accountsDict : AccountsDict
-    , notDeletedTransactionDataList : List Data
+type alias TransactionDataNotValidated =
+    { transactionsDict : Dict String Transaction
+    , decimalsDict : CurrencyDecimalsDict
     }
 
 
-type Transactions
-    = Transactions TransactionsData
+type alias TransactionsDict =
+    Dict String ValidTransaction
 
 
-emptyTransactions : Transactions
+type alias Transactions =
+    { transactionsDict : TransactionsDict
+    , decimalsDict : CurrencyDecimalsDict
+    }
+
+
+type ValidatedTransactions
+    = ValidatedTransactions Transactions
+
+
+notValidatedTransactionsToTransactions : UuidSeed -> TransactionDataNotValidated -> { newUuidSeed : UuidSeed, invalidTransactionData : List Transaction, transactions : ValidatedTransactions }
+notValidatedTransactionsToTransactions uuidSeed { decimalsDict, transactionsDict } =
+    transactionsDict
+        |> Dict.toList
+        |> List.foldl
+            (\( id, transaction ) { newUuidSeed, invalidTransactionData, transactions } ->
+                let
+                    ( newId, newSeed ) =
+                        case Prng.Uuid.fromString id of
+                            Nothing ->
+                                Uuid.new newUuidSeed
+
+                            Just uuid ->
+                                ( uuid, uuidSeed )
+
+                in
+                case transactionToValidTransaction transactions (TransactionWithId newId transaction) of
+                    Just validTransaction ->
+                        let
+                            (ValidatedTransactions transactionData) =
+                                transactions
+                        in
+                        { newUuidSeed = newSeed
+                        , invalidTransactionData = invalidTransactionData
+                        , transactions =
+                            ValidatedTransactions
+                                { transactionsDict = Dict.insert (Prng.Uuid.toString newId) validTransaction transactionData.transactionsDict
+                                , decimalsDict = transactionData.decimalsDict
+                                }
+                        }
+
+                    Nothing ->
+                        { newUuidSeed = newSeed, invalidTransactionData = transaction :: invalidTransactionData, transactions = transactions }
+            )
+            { newUuidSeed = uuidSeed
+            , invalidTransactionData = []
+            , transactions =
+                ValidatedTransactions
+                    { transactionsDict = Dict.empty
+                    , decimalsDict = decimalsDict
+                    }
+            }
+
+
+emptyTransactions : ValidatedTransactions
 emptyTransactions =
-    Transactions
+    ValidatedTransactions
         { transactionsDict = Dict.empty
         , decimalsDict = Dict.empty
-        , accountsDict = Dict.empty
-        , notDeletedTransactionDataList = []
         }
 
 
-getTransactions : TransactionsDict -> Transactions
+getTransactions : TransactionsDict -> ValidatedTransactions
 getTransactions transactionsDict =
-    Transactions
+    ValidatedTransactions
         { transactionsDict = transactionsDict
         , decimalsDict = transactionsToDecimals transactionsDict
-        , accountsDict = transactionsToAccountsDict transactionsDict
-        , notDeletedTransactionDataList = constructNotDeletedTransactionDataList transactionsDict
         }
 
 
-getTransactionsDict : Transactions -> TransactionsDict
-getTransactionsDict (Transactions { transactionsDict }) =
+getTransactionsDict : ValidatedTransactions -> TransactionsDict
+getTransactionsDict (ValidatedTransactions { transactionsDict }) =
     transactionsDict
 
 
-getDecimalsDict : Transactions -> DecimalsDict
-getDecimalsDict (Transactions { decimalsDict }) =
+getDecimalsDict : ValidatedTransactions -> CurrencyDecimalsDict
+getDecimalsDict (ValidatedTransactions { decimalsDict }) =
     decimalsDict
 
 
-getAccountsDict : Transactions -> AccountsDict
-getAccountsDict (Transactions { accountsDict }) =
-    accountsDict
+transactionsToList : ValidatedTransactions -> List TransactionWithId
+transactionsToList (ValidatedTransactions { transactionsDict }) =
+    transactionsDict
+        |> Dict.toList
+        |> List.map (\( _, validTransaction ) -> getTransactionData validTransaction)
 
 
-getNotDeletedTransactionDataList : Transactions -> List Data
-getNotDeletedTransactionDataList (Transactions { notDeletedTransactionDataList }) =
-    notDeletedTransactionDataList
-
-
-constructNotDeletedTransactionDataList : TransactionsDict -> List Data
-constructNotDeletedTransactionDataList transactionsDict =
-    Dict.values transactionsDict
-        |> List.map (\transaction -> getTransactionData transaction)
-        |> List.filter
-            (\{ isDeleted } ->
-                not isDeleted
-            )
-
-
-updateDecimalsDict : Data -> DecimalsDict -> DecimalsDict
+updateDecimalsDict : Transaction -> CurrencyDecimalsDict -> CurrencyDecimalsDict
 updateDecimalsDict transactionData decimals =
     let
-        { price, currency, isDeleted } =
+        { price, currency } =
             transactionData
     in
-    if isDeleted then
-        decimals
+    stringToDecimal price Nat.nat0 0
+        |> Result.map
+            (\decimal ->
+                Dict.update
+                    currency
+                    (\maybePrevPrecision ->
+                        let
+                            prevPrecision =
+                                Maybe.withDefault Nat.nat0 maybePrevPrecision
 
-    else
-        stringToDecimal price Nat.nat0 0
-            |> Result.map
-                (\decimal ->
-                    Dict.update
-                        currency
-                        (\maybePrevPrecision ->
-                            let
-                                prevPrecision =
-                                    Maybe.withDefault Nat.nat0 maybePrevPrecision
+                            currentPrecision =
+                                decimal |> Decimal.getPrecision
+                        in
+                        Just
+                            (if Nat.toInt currentPrecision > Nat.toInt prevPrecision then
+                                currentPrecision
 
-                                currentPrecision =
-                                    decimal |> Decimal.getPrecision
-                            in
-                            Just
-                                (if Nat.toInt currentPrecision > Nat.toInt prevPrecision then
-                                    currentPrecision
-
-                                 else
-                                    prevPrecision
-                                )
-                        )
-                        decimals
-                )
-            |> Result.withDefault decimals
+                             else
+                                prevPrecision
+                            )
+                    )
+                    decimals
+            )
+        |> Result.withDefault decimals
 
 
-transactionsToDecimals : TransactionsDict -> DecimalsDict
+transactionsToDecimals : TransactionsDict -> CurrencyDecimalsDict
 transactionsToDecimals transactionsDict =
     Dict.foldl
-        (\_ transaction decimals ->
-            updateDecimalsDict (getTransactionData transaction) decimals
-        )
-        Dict.empty
-        transactionsDict
-
-
-updateAccountsDict : Data -> AccountsDict -> AccountsDict
-updateAccountsDict transactionData accountsDict =
-    let
-        { account, currency } =
-            transactionData
-    in
-    if account == "" || Dict.member account accountsDict then
-        accountsDict
-
-    else
-        Dict.insert account currency accountsDict
-
-
-transactionsToAccountsDict : TransactionsDict -> AccountsDict
-transactionsToAccountsDict transactionsDict =
-    Dict.foldl
-        (\_ transaction accountsDict ->
-            updateAccountsDict (getTransactionData transaction) accountsDict
+        (\_ (ValidTransaction _ transaction) decimals ->
+            updateDecimalsDict transaction decimals
         )
         Dict.empty
         transactionsDict
 
 
 
--- don't forget to update csvHeaders as well
+{-
+   WARNING! don't forget to update csvHeaders as well
+-}
 
 
 toListOfListsOfStrings : TransactionsDict -> List (List String)
@@ -578,11 +547,7 @@ toListOfListsOfStrings transactionsDict =
     transactionsDict
         |> Dict.toList
         |> List.map
-            (\( _, transation ) ->
-                let
-                    { isIncome, date, category, name, price, amount, description, currency, account, id, lastUpdated, isDeleted } =
-                        getTransactionData transation
-                in
+            (\( _, ValidTransaction id { isIncome, date, category, name, price, amount, description, currency, account, lastUpdated } ) ->
                 [ boolToString isIncome -- 0
                 , date -- 1
                 , category -- 2
@@ -592,12 +557,13 @@ toListOfListsOfStrings transactionsDict =
                 , description -- 6
                 , currency -- 7
                 , account -- 8
-                , Prng.Uuid.toString id -- 9
                 , lastUpdated
-                    -- 10
+                    -- 9
                     |> Time.posixToMillis
                     |> String.fromInt
-                , boolToString isDeleted -- 11
+
+                -- Always leave id as the last column
+                , Prng.Uuid.toString id -- 10
                 ]
             )
 
@@ -613,21 +579,9 @@ csvHeaders =
     , "Description"
     , "Currency"
     , "Account"
-    , "Id"
     , "Last Updated"
-    , "Is Deleted"
+    , "Id"
     ]
-
-
-toJsonValue : Transactions -> Json.Encode.Value
-toJsonValue (Transactions { transactionsDict }) =
-    toListOfListsOfStrings transactionsDict
-        |> Json.Encode.list
-            (\list ->
-                Json.Encode.list
-                    (\value -> Json.Encode.string value)
-                    list
-            )
 
 
 listOfRowsToTransactions :
@@ -635,34 +589,31 @@ listOfRowsToTransactions :
     -> Posix
     -> List (Array String)
     ->
-        { invalidTransactionData : List Data
+        { invalidTransactionData : List Transaction
         , newUuidSeed : UuidSeed
-        , transactions : Transactions
+        , transactions : ValidatedTransactions
         }
 listOfRowsToTransactions uuidSeed timeNow listOfRows =
     List.foldl
         (\valueArray { invalidTransactionData, newUuidSeed, transactions } ->
             let
-                (Transactions { transactionsDict, decimalsDict, accountsDict, notDeletedTransactionDataList }) =
+                (ValidatedTransactions { transactionsDict, decimalsDict }) =
                     transactions
 
                 maybeId =
-                    Array.get 9 valueArray
+                    Array.get 10 valueArray
                         |> Maybe.andThen (\stringId -> Prng.Uuid.fromString stringId)
 
                 ( id, seed ) =
                     case maybeId of
                         Nothing ->
-                            Uuid.getNewUuid newUuidSeed
+                            Uuid.new newUuidSeed
 
                         Just uuid ->
                             ( uuid, newUuidSeed )
 
-                defaultTransactionValueWithoutTime =
-                    getDefaultTransactionValue id
-
                 defaultTransactionValue =
-                    { defaultTransactionValueWithoutTime | lastUpdated = timeNow }
+                    { emptyTransaction | lastUpdated = timeNow }
 
                 getBoolWithdefault index getDefault =
                     case Array.get index valueArray of
@@ -717,16 +668,13 @@ listOfRowsToTransactions uuidSeed timeNow listOfRows =
                     getStringWithdefault 8 .currency
 
                 lastUpdated =
-                    Array.get 10 valueArray
+                    Array.get 9 valueArray
                         |> Maybe.andThen (\str -> String.toInt str)
                         |> Maybe.map (\int -> Time.millisToPosix int)
                         |> Maybe.withDefault defaultTransactionValue.lastUpdated
 
-                isDeleted =
-                    getBoolWithdefault 11 .isDeleted
-
-                transactionData : Data
-                transactionData =
+                transaction : Transaction
+                transaction =
                     { isIncome = isIncome
                     , date = date
                     , category = category
@@ -736,44 +684,29 @@ listOfRowsToTransactions uuidSeed timeNow listOfRows =
                     , description = description
                     , currency = currency
                     , account = account
-                    , id = id
                     , lastUpdated = lastUpdated
-                    , isDeleted = isDeleted
                     }
-
-                idString =
-                    Prng.Uuid.toString transactionData.id
             in
-            case getTransaction transactions transactionData of
-                Just transaction ->
+            case transactionToValidTransaction transactions (TransactionWithId id transaction) of
+                Just validTransaction ->
                     { invalidTransactionData = invalidTransactionData
                     , newUuidSeed = seed
                     , transactions =
-                        Transactions
+                        ValidatedTransactions
                             { transactionsDict =
                                 Dict.insert
-                                    idString
-                                    transaction
+                                    (Prng.Uuid.toString id)
+                                    validTransaction
                                     transactionsDict
                             , decimalsDict =
                                 updateDecimalsDict
-                                    transactionData
+                                    transaction
                                     decimalsDict
-                            , accountsDict =
-                                updateAccountsDict
-                                    transactionData
-                                    accountsDict
-                            , notDeletedTransactionDataList =
-                                if isDeleted then
-                                    notDeletedTransactionDataList
-
-                                else
-                                    transactionData :: notDeletedTransactionDataList
                             }
                     }
 
                 Nothing ->
-                    { invalidTransactionData = transactionData :: invalidTransactionData
+                    { invalidTransactionData = transaction :: invalidTransactionData
                     , newUuidSeed = seed
                     , transactions = transactions
                     }
@@ -785,44 +718,11 @@ listOfRowsToTransactions uuidSeed timeNow listOfRows =
         listOfRows
 
 
-
--- type alias TransactionsFromJs =
---     List (Array String)
--- -- used only for transactions from localStorage
--- stringToTransactionDict :
---     UuidSeed
---     -> String
---     ->
---         { invalidTransactionData : List Data
---         , newUuidSeed : UuidSeed
---         , transactions : Transactions
---         }
--- stringToTransactionDict uuidSeed string =
---     case
---         Json.Decode.decodeString
---             (Json.Decode.field "payload"
---                 (Json.Decode.list
---                     (Json.Decode.array Json.Decode.string)
---                 )
---             )
---             string
---     of
---         Ok payload ->
---             listOfRowsToTransactionsDict
---                 uuidSeed
---                 (Time.millisToPosix 0)
---                 payload
---         Err _ ->
---             { invalidTransactionData = []
---             , newUuidSeed = uuidSeed
---             , transactions = emptyTransactions
---             }
--- UTILS
-
-
-getNewTransactionTemplate : Transactions -> Prng.Uuid.Uuid -> Data
-getNewTransactionTemplate transactions uuid =
-    getNotDeletedTransactionDataList transactions
+getNewTransactionTemplate : ValidatedTransactions -> Transaction
+getNewTransactionTemplate transactions =
+    transactions
+        |> transactionsToList
+        |> List.map (\(TransactionWithId _ transaction) -> transaction)
         |> List.sortWith
             (\a b ->
                 let
@@ -842,11 +742,11 @@ getNewTransactionTemplate transactions uuid =
                     EQ
             )
         |> List.head
-        |> Maybe.withDefault (getDefaultTransactionValue uuid)
-        |> (\t -> { t | id = uuid, name = "", description = "", price = "", amount = "" })
+        |> Maybe.withDefault emptyTransaction
+        |> (\t -> { t | name = "", description = "", price = "", amount = "" })
 
 
-mergeTransactions : Transactions -> TransactionsDict -> Transactions
+mergeTransactions : ValidatedTransactions -> TransactionsDict -> ValidatedTransactions
 mergeTransactions oldTransactions newTransactionsDict =
     let
         oldTransactionsDict =
@@ -857,11 +757,11 @@ mergeTransactions oldTransactions newTransactionsDict =
             (\k v dict -> Dict.insert k v dict)
             (\k vOld vNew dict ->
                 let
-                    newValue =
-                        getTransactionData vNew
+                    (ValidTransaction _ newValue) =
+                        vNew
 
-                    oldValue =
-                        getTransactionData vOld
+                    (ValidTransaction _ oldValue) =
+                        vOld
                 in
                 if Time.posixToMillis newValue.lastUpdated > Time.posixToMillis oldValue.lastUpdated then
                     Dict.insert k vNew dict
@@ -876,14 +776,14 @@ mergeTransactions oldTransactions newTransactionsDict =
         )
 
 
-getPrice : Data -> DecimalsDict -> Result ParseError (Decimal Int Int)
-getPrice transactionData decimals =
+getPrice : Transaction -> CurrencyDecimalsDict -> Result ParseSumError (Decimal Int Int)
+getPrice transactionData decimalsDict =
     let
-        largestKnownDecimalsLength =
-            Dict.get transactionData.currency decimals
+        decimals =
+            Dict.get transactionData.currency decimalsDict
                 |> Maybe.withDefault Nat.nat0
     in
-    stringToDecimal transactionData.price largestKnownDecimalsLength 0
+    stringToDecimal transactionData.price decimals 0
         |> Result.andThen
             (\price ->
                 let
@@ -891,11 +791,11 @@ getPrice transactionData decimals =
                         Decimal.getPrecision price
 
                     largestDecimalsLength =
-                        if Nat.toInt currentDecimalsLength > Nat.toInt largestKnownDecimalsLength then
+                        if Nat.toInt currentDecimalsLength > Nat.toInt decimals then
                             currentDecimalsLength
 
                         else
-                            largestKnownDecimalsLength
+                            decimals
                 in
                 Result.andThen
                     (\amount ->
@@ -903,14 +803,12 @@ getPrice transactionData decimals =
                             price
                             amount
                             |> Result.mapError (\err -> ArithmeticParseError err)
-                            |> Result.andThen
-                                (\finalPrice -> Ok finalPrice)
                     )
                     (stringToDecimal transactionData.amount largestDecimalsLength 1)
             )
 
 
-getFullPrice : Data -> DecimalsDict -> Result ParseError String
+getFullPrice : Transaction -> CurrencyDecimalsDict -> Result ParseSumError String
 getFullPrice transactionData decimals =
     Result.map
         (\price ->
@@ -927,10 +825,104 @@ getFullPrice transactionData decimals =
         (getPrice transactionData decimals)
 
 
-insertTransaction : Transactions -> Transaction -> Transactions
-insertTransaction transactions transaction =
-    Dict.insert
-        (Prng.Uuid.toString (getTransactionData transaction |> .id))
-        transaction
-        (getTransactionsDict transactions)
-        |> getTransactions
+getTransactionById : ValidatedTransactions -> Uuid -> Maybe ValidTransaction
+getTransactionById (ValidatedTransactions { transactionsDict }) id =
+    Dict.get (Prng.Uuid.toString id) transactionsDict
+
+
+type alias TransactionUpdate =
+    { id : String
+    , newTransaction :
+        { isIncome : Maybe Bool
+        , date : Maybe String
+        , category : Maybe String
+        , name : Maybe String
+        , price : Maybe String
+        , amount : Maybe String
+        , description : Maybe String
+        , currency : Maybe String
+        , account : Maybe String
+        , lastUpdated : Maybe Int
+        }
+    }
+
+
+type alias TransactionNew =
+    { id : String
+    , transaction :
+        { isIncome : Bool
+        , date : String
+        , category : String
+        , name : String
+        , price : String
+        , amount : String
+        , description : String
+        , currency : String
+        , account : String
+        , lastUpdated : Int
+        }
+    }
+
+
+hasChanged : Transaction -> Transaction -> (Transaction -> a) -> Maybe a
+hasChanged prevTr tr getter =
+    if getter prevTr == getter tr then
+        Nothing
+
+    else
+        Just (getter tr)
+
+
+updateTransaction : ValidatedTransactions -> ValidTransaction -> ValidTransaction -> { transactions : ValidatedTransactions, updateTransaction : TransactionUpdate }
+updateTransaction (ValidatedTransactions { transactionsDict }) (ValidTransaction _ prevTr) ((ValidTransaction id transaction) as validTransaction) =
+    { transactions =
+        transactionsDict
+            |> Dict.insert (Prng.Uuid.toString id) validTransaction
+            |> getTransactions
+    , updateTransaction =
+        { id = Prng.Uuid.toString id
+        , newTransaction =
+            { isIncome = hasChanged prevTr transaction .isIncome
+            , date = hasChanged prevTr transaction .date
+            , category = hasChanged prevTr transaction .category
+            , name = hasChanged prevTr transaction .name
+            , price = hasChanged prevTr transaction .price
+            , amount = hasChanged prevTr transaction .amount
+            , description = hasChanged prevTr transaction .description
+            , currency = hasChanged prevTr transaction .currency
+            , account = hasChanged prevTr transaction .account
+            , lastUpdated = hasChanged prevTr transaction (\t -> Time.posixToMillis t.lastUpdated)
+            }
+        }
+    }
+
+
+createTransaction : ValidatedTransactions -> ValidTransaction -> { transactions : ValidatedTransactions, transactionNew : TransactionNew }
+createTransaction (ValidatedTransactions { transactionsDict }) ((ValidTransaction id transaction) as validTransaction) =
+    { transactions =
+        transactionsDict
+            |> Dict.insert (Prng.Uuid.toString id) validTransaction
+            |> getTransactions
+    , transactionNew =
+        { id = Prng.Uuid.toString id
+        , transaction =
+            { isIncome = transaction.isIncome
+            , date = transaction.date
+            , category = transaction.category
+            , name = transaction.name
+            , price = transaction.price
+            , amount = transaction.amount
+            , description = transaction.description
+            , currency = transaction.currency
+            , account = transaction.account
+            , lastUpdated = Time.posixToMillis transaction.lastUpdated
+            }
+        }
+    }
+
+deleteTransaction : ValidatedTransactions -> Uuid -> ValidatedTransactions
+deleteTransaction (ValidatedTransactions { transactionsDict, decimalsDict }) id =
+    ValidatedTransactions
+        { transactionsDict = Dict.remove (Prng.Uuid.toString id) transactionsDict
+        , decimalsDict = decimalsDict
+        }

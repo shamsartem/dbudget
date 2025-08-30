@@ -3,16 +3,17 @@
     "*.css": "scss"
   },
   "[scss]": {
-    "editor.defaultFormatter": "stylelint.vscode-stylelint"
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
   },
   "[json]": {
     "editor.defaultFormatter": "esbenp.prettier-vscode"
   },
   "[html]": {
-    "editor.defaultFormatter": "vscode.html-language-features"
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
   },
   "[typescript]": {
     "editor.defaultFormatter": "esbenp.prettier-vscode"
   },
-  "cssVariables.lookupFiles": ["src/styles/variables.css"]
+  "cssVariables.lookupFiles": ["src/styles/variables.css"],
+  "cSpell.words": ["Automerge", "localforage"]
 }

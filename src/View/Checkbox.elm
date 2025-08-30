@@ -1,6 +1,6 @@
 module View.Checkbox exposing (Config, view)
 
-import Html exposing (..)
+import Html exposing (Attribute, Html, div, i, input, label, text)
 import Html.Attributes
     exposing
         ( attribute
@@ -69,7 +69,6 @@ view config =
         checkboxattributes =
             List.append
                 [ c "input"
-                , class "visuallyHidden"
                 , onCheck config.onCheck
                 , checked config.checked
                 , id config.id

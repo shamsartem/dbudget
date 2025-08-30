@@ -4,20 +4,17 @@
   flex-direction: column;
   align-items: center;
   justify-content: flex-end;
-  padding: var(--space-lg);
+  padding: 20px;
   pointer-events: none;
+}
 
-  &_toast {
-    display: flex;
-    max-width: 100%;
-    align-items: center;
-    justify-content: center;
-    padding: var(--space-lg);
-    margin-top: var(--space-md);
-    background-color: var(--c-gray-9-7);
-    border-radius: var(--bdrs-md);
-    color: var(--c-gray-1);
-    line-height: 1.5;
-    text-align: center;
-  }
+.Toasts_toast {
+  display: flex;
+  max-width: 100%;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  margin-top: 10px;
+  line-height: 1.5;
+  text-align: center;
 }
