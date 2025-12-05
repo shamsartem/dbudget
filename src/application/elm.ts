@@ -79,6 +79,7 @@ export function sendToElm(
 ): void
 export function sendToElm(msg: 'NeedRefresh'): void
 export function sendToElm(msg: 'OfflineReady'): void
+export function sendToElm(msg: 'SyncComplete', message: string): void
 export function sendToElm(msg: 'GotHelloBack', socketId: string): void
 export function sendToElm(msg: 'Toast', message: string): void
 export function sendToElm(tag: string, payload?: unknown): void {

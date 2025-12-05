@@ -14,5 +14,6 @@
   "[typescript]": {
     "editor.defaultFormatter": "esbenp.prettier-vscode"
   },
-  "cssVariables.lookupFiles": ["src/styles/variables.css"]
+  "cssVariables.lookupFiles": ["src/styles/variables.css"],
+  "elmLS.elmPath": "node_modules/.bin/elm"
 }

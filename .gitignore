@@ -28,3 +28,5 @@ elm-stuff
 public/elm.js
 
 public/.vercel
+.envrc
+.direnv
