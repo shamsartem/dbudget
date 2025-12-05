@@ -5,6 +5,7 @@ import { registerSW } from 'virtual:pwa-register'
 
 import {
   cleanupPeers,
+  sendMessageToPeer,
   sendTransactionsToAll,
   sendTransactionsToPeer,
   socket,
@@ -156,6 +157,16 @@ app.ports.sendMessage.subscribe(
           return
         }
         sendTransactionsToPeer(payload.socketId, payload.transactions)
+        break
+      }
+      case 'TransactionConfirmation': {
+        if (typeof payload !== 'string') {
+          sendToElm('Toast', 'Invalid confirmation data')
+          return
+        }
+        sendMessageToPeer(payload, {
+          msg: 'transactionConfirmation',
+        })
         break
       }
       default: {

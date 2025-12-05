@@ -8,6 +8,7 @@ export type SentFromElmMsg =
   | 'RefreshAppClicked'
   | 'MergedReceivedTransactions'
   | 'GotHelloBack'
+  | 'TransactionConfirmation'
 
 export type ElmApp = {
   ports: {
@@ -75,7 +76,7 @@ export function sendToElm(
 ): void
 export function sendToElm(
   msg: 'ReceivedTransactions',
-  transactions: Transactions,
+  payload: { transactions: Transactions; socketId: string },
 ): void
 export function sendToElm(msg: 'NeedRefresh'): void
 export function sendToElm(msg: 'OfflineReady'): void
