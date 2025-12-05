@@ -403,14 +403,19 @@ update message model =
                 "ReceivedTransactions" ->
                     case
                         ( Json.Decode.decodeValue
-                            (Json.Decode.list
-                                (Json.Decode.array Json.Decode.string)
+                            (Json.Decode.map2 Tuple.pair
+                                (Json.Decode.field "transactions"
+                                    (Json.Decode.list
+                                        (Json.Decode.array Json.Decode.string)
+                                    )
+                                )
+                                (Json.Decode.field "socketId" Json.Decode.string)
                             )
                             payload
                         , store.signedInData
                         )
                     of
-                        ( Ok listOfRows, Just signedInData ) ->
+                        ( Ok ( listOfRows, socketId ), Just signedInData ) ->
                             let
                                 { transactions, newUuidSeed } =
                                     Transaction.listOfRowsToTransactions
@@ -444,6 +449,8 @@ update message model =
                                     (Port.MergedReceivedTransactions
                                         mergedTransactions
                                     )
+                                , Port.send
+                                    (Port.TransactionConfirmation socketId)
                                 ]
                             )
 

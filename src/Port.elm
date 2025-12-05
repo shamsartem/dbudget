@@ -23,6 +23,7 @@ type SendMessage
     = UpdatedTransactions Transactions Transactions
     | GotHelloBack { transactions : Transactions, socketId : String }
     | MergedReceivedTransactions Transactions
+    | TransactionConfirmation String
     | SignedIn
         { username : String
         , password : String
@@ -58,6 +59,11 @@ send msg =
             { tag = "MergedReceivedTransactions"
             , payload =
                 Transaction.toJsonValue transactions
+            }
+
+        TransactionConfirmation socketId ->
+            { tag = "TransactionConfirmation"
+            , payload = Json.Encode.string socketId
             }
 
         SignedIn { username, password, deviceName, server } ->

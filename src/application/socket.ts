@@ -35,6 +35,9 @@ type PeerMessage =
   | {
       msg: 'backedUpTransactions'
     }
+  | {
+      msg: 'transactionConfirmation'
+    }
 
 const peerMessageSchema: JSONSchemaType<PeerMessage> = {
   type: 'object',
@@ -79,6 +82,11 @@ const peerMessageSchema: JSONSchemaType<PeerMessage> = {
         msg: { type: 'string', enum: ['backedUpTransactions'] },
       },
     },
+    {
+      properties: {
+        msg: { type: 'string', enum: ['transactionConfirmation'] },
+      },
+    },
   ],
   required: ['msg'],
 }
@@ -91,6 +99,8 @@ class Peer {
   deviceName?: string
   #isTrusted = false
   #p: SimplePeerInstance
+  #sentTransactionChunks = 0
+  #receivedConfirmations = 0
   constructor({
     initiator,
     socketId,
@@ -187,7 +197,25 @@ class Peer {
             }
 
             case 'transactions': {
-              sendToElm('ReceivedTransactions', parsedData.payload)
+              sendToElm('ReceivedTransactions', {
+                transactions: parsedData.payload,
+                socketId: this.socketId,
+              })
+              break
+            }
+
+            case 'transactionConfirmation': {
+              this.#receivedConfirmations++
+              if (
+                this.#sentTransactionChunks > 0 &&
+                this.#receivedConfirmations >= this.#sentTransactionChunks
+              ) {
+                this.write({
+                  msg: 'finishedSendingTransactions',
+                })
+                this.#sentTransactionChunks = 0
+                this.#receivedConfirmations = 0
+              }
               break
             }
 
@@ -261,6 +289,28 @@ class Peer {
         console.error(`Not able to compress message: ${String(e)}`)
       })
   }
+  sendTransactions(transactions: Transactions): void {
+    const CHUNK_SIZE = 1000
+    const chunks = Math.ceil(transactions.length / CHUNK_SIZE)
+    this.#sentTransactionChunks = chunks
+    this.#receivedConfirmations = 0
+
+    for (let i = 0; i < transactions.length; i += CHUNK_SIZE) {
+      this.write({
+        msg: 'transactions',
+        payload: transactions.slice(i, i + CHUNK_SIZE),
+      })
+    }
+
+    // If no chunks were sent (empty transactions), send finished immediately
+    if (chunks === 0) {
+      this.write({
+        msg: 'finishedSendingTransactions',
+      })
+      this.#sentTransactionChunks = 0
+      this.#receivedConfirmations = 0
+    }
+  }
 }
 
 const peersBySocketId = new Map<string, Peer>()
@@ -282,20 +332,15 @@ export const sendTransactionsToAll = (transactions: Transactions): void => {
   })
 }
 
-const CHUNK_SIZE = 1000
 export const sendTransactionsToPeer = (
   socketId: string,
   transactions: Transactions,
 ): void => {
-  for (let i = 0; i < transactions.length; i += CHUNK_SIZE) {
-    peersBySocketId.get(socketId)?.write({
-      msg: 'transactions',
-      payload: transactions.slice(i, i + CHUNK_SIZE),
-    })
+  const peer = peersBySocketId.get(socketId)
+  if (peer === undefined) {
+    return
   }
-  sendMessageToPeer(socketId, {
-    msg: 'finishedSendingTransactions',
-  })
+  peer.sendTransactions(transactions)
 }
 
 export const sendMessageToPeer = (
