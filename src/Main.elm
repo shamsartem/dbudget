@@ -61,6 +61,7 @@ initialModel maybeSeed { seedAndExtension, deviceName, server, windowWidth } url
             , windowWidth = windowWidth
             , isRefreshWindowVisible = False
             , isOfflineReadyWindowVisible = False
+            , syncCompleteDialogMessage = Nothing
             , toasts = []
             }
     in
@@ -123,7 +124,7 @@ getTitle model =
 view : Model -> Document Msg
 view model =
     let
-        { isOfflineReadyWindowVisible, isRefreshWindowVisible, toasts } =
+        { isOfflineReadyWindowVisible, isRefreshWindowVisible, syncCompleteDialogMessage, toasts } =
             getStore model
 
         viewPage toMsg content =
@@ -160,6 +161,20 @@ view model =
 
                   else
                     text ""
+                , case syncCompleteDialogMessage of
+                    Just message ->
+                        Confirm.view
+                            { title = message
+                            , maybeBody = Nothing
+                            , cancelButton =
+                                { title = "Ok"
+                                , handleClick = SyncCompleteDialogDismissed
+                                }
+                            , okButton = Nothing
+                            }
+
+                    Nothing ->
+                        text ""
                 , if List.length toasts /= 0 then
                     Toasts.view toasts
 
@@ -199,6 +214,7 @@ type Msg
     | OkOfflineReadyClicked
     | RefreshClicked
     | CancelRefreshClicked
+    | SyncCompleteDialogDismissed
     | RemoveToast
 
 
@@ -370,6 +386,20 @@ update message model =
                     , Cmd.none
                     )
 
+                "SyncComplete" ->
+                    case
+                        payload |> Json.Decode.decodeValue Json.Decode.string
+                    of
+                        Ok syncMessage ->
+                            ( setStore
+                                { store | syncCompleteDialogMessage = Just syncMessage }
+                                model
+                            , Cmd.none
+                            )
+
+                        Err _ ->
+                            ( model, Cmd.none )
+
                 "ReceivedTransactions" ->
                     case
                         ( Json.Decode.decodeValue
@@ -479,6 +509,13 @@ update message model =
         ( CancelRefreshClicked, _ ) ->
             ( setStore
                 { store | isRefreshWindowVisible = False }
+                model
+            , Cmd.none
+            )
+
+        ( SyncCompleteDialogDismissed, _ ) ->
+            ( setStore
+                { store | syncCompleteDialogMessage = Nothing }
                 model
             , Cmd.none
             )

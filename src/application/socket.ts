@@ -193,7 +193,7 @@ class Peer {
 
             case 'finishedSendingTransactions': {
               sendToElm(
-                'Toast',
+                'SyncComplete',
                 `Got transactions from ${this.deviceName ?? ''}`,
               )
               this.write({
@@ -205,7 +205,7 @@ class Peer {
             case 'backedUpTransactions': {
               sendToElm(
                 'Toast',
-                `${this.deviceName ?? ''} backed up transactions from us`,
+                `Sent transactions to ${this.deviceName ?? ''}`,
               )
               break
             }

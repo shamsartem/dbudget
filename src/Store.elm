@@ -30,6 +30,7 @@ type alias Store =
     , windowWidth : Int
     , isRefreshWindowVisible : Bool
     , isOfflineReadyWindowVisible : Bool
+    , syncCompleteDialogMessage : Maybe String
     , toasts : List String
     }
 
